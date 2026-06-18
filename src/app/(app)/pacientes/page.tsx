@@ -4,10 +4,11 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Plus, Search, UserCheck, Trash2, Filter, Users, ShieldAlert, CircleUserRound, ToggleLeft, ToggleRight } from "lucide-react";
+import { Plus, Search, UserCheck, Trash2, Filter, Users, ShieldAlert, CircleUserRound, ToggleLeft, ToggleRight, X } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
+import * as Dialog from "@radix-ui/react-dialog";
 import { createClient } from "@/lib/supabase/client";
 import { useCentro } from "@/context/CentroContext";
 import { pacienteSchema, type PacienteFormData } from "@/types/forms";
@@ -168,7 +169,7 @@ export default function PacientesPage() {
           </div>
           <button
             className="btn-primary btn-pressable flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs tracking-wider uppercase"
-            onClick={() => { setShowForm(!showForm); setEditingId(null); reset(); }}
+            onClick={() => { setShowForm(true); setEditingId(null); reset(); }}
             id="nuevo-paciente-btn"
           >
             <Plus size={15} strokeWidth={3} />
@@ -238,129 +239,165 @@ export default function PacientesPage() {
             </div>
           </div>
 
-          {/* Formulario Inline */}
-          <AnimatePresence>
-            {showForm && (
-              <motion.div
-                className="inline-form-box border border-[var(--border)] rounded-xl p-4 bg-[var(--bg-subtle)] mb-4"
-                initial={{ opacity: 0, height: 0, overflow: "hidden" }}
-                animate={{ opacity: 1, height: "auto", overflow: "visible" }}
-                exit={{ opacity: 0, height: 0, overflow: "hidden" }}
-                transition={{ duration: 0.3, ease: [0.23, 1, 0.32, 1] }}
-              >
-                <h3 className="form-card-title text-sm font-bold mb-3">Nuevo paciente</h3>
-                <form onSubmit={handleSubmit((d) => createMutation.mutate(d))} noValidate>
-                  <div className="form-grid">
-                    <div className="form-group span-full">
-                      <label className="form-label" htmlFor="nombre_completo">
-                        Nombre completo <span className="req">*</span>
-                      </label>
-                      <input
-                        id="nombre_completo"
-                        type="text"
-                        className={`form-input ${errors.nombre_completo ? "error" : ""}`}
-                        placeholder="Nombre y apellido del paciente"
-                        {...register("nombre_completo")}
+          {/* Modal de Nuevo Paciente */}
+          <Dialog.Root open={showForm} onOpenChange={(open) => { if (!open) reset(); setShowForm(open); }}>
+            <Dialog.Portal>
+              <AnimatePresence>
+                {showForm && (
+                  <>
+                    <Dialog.Overlay asChild>
+                      <motion.div
+                        className="fixed inset-0 bg-black/60 z-[300] backdrop-blur-md"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        transition={{ duration: 0.2 }}
                       />
-                      {errors.nombre_completo && (
-                        <p className="form-error">{errors.nombre_completo.message}</p>
-                      )}
-                    </div>
-
-                    <div className="form-group">
-                      <label className="form-label" htmlFor="telefono">Teléfono</label>
-                      <input
-                        id="telefono"
-                        type="tel"
-                        className="form-input"
-                        placeholder="+504 9999-0000"
-                        {...register("telefono")}
-                      />
-                    </div>
-
-                    <div className="form-group">
-                      <label className="form-label" htmlFor="pac-email">Correo electrónico</label>
-                      <input
-                        id="pac-email"
-                        type="email"
-                        className={`form-input ${errors.email ? "error" : ""}`}
-                        placeholder="paciente@correo.com"
-                        {...register("email")}
-                      />
-                      {errors.email && <p className="form-error">{errors.email.message}</p>}
-                    </div>
-
-                    <div className="form-group">
-                      <label className="form-label" htmlFor="fecha_nacimiento">Fecha de nacimiento</label>
-                      <input
-                        id="fecha_nacimiento"
-                        type="date"
-                        className="form-input"
-                        {...register("fecha_nacimiento")}
-                      />
-                    </div>
-
-                    <div className="form-group">
-                      <label className="form-label" htmlFor="plan_id">Plan / Servicio</label>
-                      <select
-                        id="plan_id"
-                        className="form-input form-select"
-                        {...register("plan_id")}
+                    </Dialog.Overlay>
+                    <Dialog.Content asChild>
+                      <motion.div
+                        className="fixed top-1/2 left-1/2 w-full max-w-5xl z-[301] outline-none p-4"
+                        initial={{ opacity: 0, scale: 0.95, x: "-50%", y: "-48%" }}
+                        animate={{ opacity: 1, scale: 1, x: "-50%", y: "-50%" }}
+                        exit={{ opacity: 0, scale: 0.95, x: "-50%", y: "-48%" }}
+                        transition={{ duration: 0.3, ease: [0.32, 0.72, 0, 1] }}
                       >
-                        <option value="">Sin plan específico</option>
-                        {planes.map((p) => (
-                          <option key={p.id} value={p.id}>{p.nombre}</option>
-                        ))}
-                      </select>
-                    </div>
+                        {/* Box double-bezel wrapper */}
+                        <div className="p-1.5 bg-white/5 dark:bg-white/5 border border-white/10 dark:border-white/5 rounded-[28px] shadow-2xl backdrop-blur-xl">
+                          <div className="bg-white/95 dark:bg-[#131b2e]/95 border border-white/10 dark:border-white/5 rounded-[22px] p-6 text-[var(--text)]">
+                            <div className="flex items-center justify-between mb-4 pb-3 border-b border-[var(--border)]">
+                              <Dialog.Title className="text-lg font-extrabold tracking-tight">
+                                Nuevo Paciente
+                              </Dialog.Title>
+                              <Dialog.Close asChild>
+                                <button
+                                  type="button"
+                                  className="icon-btn btn-pressable flex items-center justify-center w-8 h-8 rounded-full border border-[var(--border)] hover:bg-[var(--surface-hover)] transition-all"
+                                  aria-label="Cerrar"
+                                >
+                                  <X size={14} />
+                                </button>
+                              </Dialog.Close>
+                            </div>
+                            <form onSubmit={handleSubmit((d) => createMutation.mutate(d))} noValidate>
+                              <div className="form-grid">
+                                <div className="form-group span-full">
+                                  <label className="form-label" htmlFor="nombre_completo">
+                                    Nombre completo <span className="req">*</span>
+                                  </label>
+                                  <input
+                                    id="nombre_completo"
+                                    type="text"
+                                    className={`form-input ${errors.nombre_completo ? "error" : ""}`}
+                                    placeholder="Nombre y apellido del paciente"
+                                    {...register("nombre_completo")}
+                                  />
+                                  {errors.nombre_completo && (
+                                    <p className="form-error">{errors.nombre_completo.message}</p>
+                                  )}
+                                </div>
 
-                    <div className="form-group">
-                      <label className="form-label" htmlFor="estado_suscripcion">
-                        Estado <span className="req">*</span>
-                      </label>
-                      <select
-                        id="estado_suscripcion"
-                        className="form-input form-select"
-                        {...register("estado_suscripcion")}
-                      >
-                        <option value="activo">Activo</option>
-                        <option value="pausado">Pausado</option>
-                        <option value="cancelado">Cancelado</option>
-                      </select>
-                    </div>
+                                <div className="form-group">
+                                  <label className="form-label" htmlFor="telefono">Teléfono</label>
+                                  <input
+                                    id="telefono"
+                                    type="tel"
+                                    className="form-input"
+                                    placeholder="+504 9999-0000"
+                                    {...register("telefono")}
+                                  />
+                                </div>
 
-                    <div className="form-group span-full">
-                      <label className="form-label" htmlFor="notas">Notas</label>
-                      <textarea
-                        id="notas"
-                        className="form-input form-textarea"
-                        placeholder="Información adicional..."
-                        rows={2}
-                        {...register("notas")}
-                      />
-                    </div>
-                  </div>
+                                <div className="form-group">
+                                  <label className="form-label" htmlFor="pac-email">Correo electrónico</label>
+                                  <input
+                                    id="pac-email"
+                                    type="email"
+                                    className={`form-input ${errors.email ? "error" : ""}`}
+                                    placeholder="paciente@correo.com"
+                                    {...register("email")}
+                                  />
+                                  {errors.email && <p className="form-error">{errors.email.message}</p>}
+                                </div>
 
-                  <div className="form-actions mt-3">
-                    <button
-                      type="button"
-                      className="btn-ghost btn-pressable items-center px-4 py-2 text-sm font-semibold rounded-lg"
-                      onClick={() => { setShowForm(false); reset(); }}
-                    >
-                      Cancelar
-                    </button>
-                    <button
-                      type="submit"
-                      className="btn-primary btn-pressable px-4 py-2 text-sm font-semibold rounded-lg"
-                      disabled={createMutation.isPending}
-                    >
-                      {createMutation.isPending ? <span className="btn-spinner" /> : "Guardar paciente"}
-                    </button>
-                  </div>
-                </form>
-              </motion.div>
-            )}
-          </AnimatePresence>
+                                <div className="form-group">
+                                  <label className="form-label" htmlFor="fecha_nacimiento">Fecha de nacimiento</label>
+                                  <input
+                                    id="fecha_nacimiento"
+                                    type="date"
+                                    className="form-input"
+                                    {...register("fecha_nacimiento")}
+                                  />
+                                </div>
+
+                                <div className="form-group">
+                                  <label className="form-label" htmlFor="plan_id">Plan / Servicio</label>
+                                  <select
+                                    id="plan_id"
+                                    className="form-input form-select"
+                                    {...register("plan_id")}
+                                  >
+                                    <option value="">Sin plan específico</option>
+                                    {planes.map((p) => (
+                                      <option key={p.id} value={p.id}>{p.nombre}</option>
+                                    ))}
+                                  </select>
+                                </div>
+
+                                <div className="form-group">
+                                  <label className="form-label" htmlFor="estado_suscripcion">
+                                    Estado <span className="req">*</span>
+                                  </label>
+                                  <select
+                                    id="estado_suscripcion"
+                                    className="form-input form-select"
+                                    {...register("estado_suscripcion")}
+                                  >
+                                    <option value="activo">Activo</option>
+                                    <option value="pausado">Pausado</option>
+                                    <option value="cancelado">Cancelado</option>
+                                  </select>
+                                </div>
+
+                                <div className="form-group span-full">
+                                  <label className="form-label" htmlFor="notas">Notas</label>
+                                  <textarea
+                                    id="notas"
+                                    className="form-input form-textarea"
+                                    placeholder="Información adicional..."
+                                    rows={2}
+                                    {...register("notas")}
+                                  />
+                                </div>
+                              </div>
+
+                              <div className="form-actions mt-4">
+                                <Dialog.Close asChild>
+                                  <button
+                                    type="button"
+                                    className="btn-ghost btn-pressable items-center px-4 py-2 text-sm font-semibold rounded-lg"
+                                  >
+                                    Cancelar
+                                  </button>
+                                </Dialog.Close>
+                                <button
+                                  type="submit"
+                                  className="btn-primary btn-pressable px-4 py-2 text-sm font-semibold rounded-lg"
+                                  disabled={createMutation.isPending}
+                                >
+                                  {createMutation.isPending ? <span className="btn-spinner" /> : "Guardar paciente"}
+                                </button>
+                              </div>
+                            </form>
+                          </div>
+                        </div>
+                      </motion.div>
+                    </Dialog.Content>
+                  </>
+                )}
+              </AnimatePresence>
+            </Dialog.Portal>
+          </Dialog.Root>
 
           {/* Tabla del Directorio */}
           {isLoading ? (
@@ -387,8 +424,13 @@ export default function PacientesPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {pacientes.map((p) => (
-                    <tr key={p.id}>
+                  {pacientes.map((p, i) => (
+                    <motion.tr
+                      key={p.id}
+                      initial={{ opacity: 0, x: -8 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: Math.min(i * 0.03, 0.3) }}
+                    >
                       <td>
                         <div className="flex items-center gap-3">
                           <div className="pc-avatar flex items-center justify-center font-bold text-xs bg-[var(--accent-muted)] text-[var(--accent)] w-9 h-9 rounded-full">
@@ -453,23 +495,23 @@ export default function PacientesPage() {
                           </button>
                         </div>
                       </td>
-                    </tr>
+                    </motion.tr>
                   ))}
                 </tbody>
               </table>
             </div>
           )}
+        </div>
 
-          {/* Directory Pagination Footer */}
-          <div className="directory-footer flex items-center justify-between border-t border-[var(--border)] pt-4 mt-4 pl-4 pb-2 text-xs font-semibold text-[var(--text-muted)] flex-wrap gap-2">
-            <div>
-              Mostrando 1-{pacientes.length} de {pacientes.length} pacientes
-            </div>
-            <div className="pagination flex items-center gap-1 pr-2 pb-2">
-              <button className="btn-page disabled px-2 py-1 rounded border border-[var(--border)]">&lt;</button>
-              <button className="btn-page active px-2 py-1 rounded bg-[var(--accent)] text-[var(--accent-fg)]">1</button>
-              <button className="btn-page disabled px-2 py-1 rounded border border-[var(--border)]">&gt;</button>
-            </div>
+        {/* Directory Pagination Footer */}
+        <div className="directory-footer flex items-center justify-between border-t border-[var(--border)] pt-4 mt-4 pl-4 pb-2 text-xs font-semibold text-[var(--text-muted)] flex-wrap gap-2">
+          <div>
+            Mostrando 1-{pacientes.length} de {pacientes.length} pacientes
+          </div>
+          <div className="pagination flex items-center gap-1 pr-2 pb-2">
+            <button className="btn-page disabled px-2 py-1 rounded border border-[var(--border)]">&lt;</button>
+            <button className="btn-page active px-2 py-1 rounded bg-[var(--accent)] text-[var(--accent-fg)]">1</button>
+            <button className="btn-page disabled px-2 py-1 rounded border border-[var(--border)]">&gt;</button>
           </div>
         </div>
       </div>
@@ -479,7 +521,7 @@ export default function PacientesPage() {
           display: flex;
           flex-direction: column;
           gap: 1.5rem;
-          max-width: 1400px;
+          max-width: 1600px;
         }
 
         .kpi-grid {

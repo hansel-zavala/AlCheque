@@ -4,9 +4,10 @@ import { useState, useEffect, Suspense } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Plus, Trash2, Eye, ArrowUpCircle, ArrowDownCircle, ArrowLeftRight } from "lucide-react";
+import { Plus, Trash2, Eye, ArrowUpCircle, ArrowDownCircle, ArrowLeftRight, X } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
+import * as Dialog from "@radix-ui/react-dialog";
 import { createClient } from "@/lib/supabase/client";
 import { useCentro } from "@/context/CentroContext";
 import { transaccionSchema, type TransaccionFormData } from "@/types/forms";
@@ -37,6 +38,7 @@ function TransaccionesContent() {
     handleSubmit,
     watch,
     reset,
+    setValue,
     formState: { errors },
   } = useForm<TransaccionFormData>({
     resolver: zodResolver(transaccionSchema),
@@ -47,6 +49,7 @@ function TransaccionesContent() {
   });
 
   const tipoSeleccionado = watch("tipo");
+  const categoriaSeleccionadaId = watch("servicio_categoria_id");
 
   // Queries
   const { data: transacciones = [], isLoading } = useQuery({
@@ -96,6 +99,16 @@ function TransaccionesContent() {
     },
     enabled: !!centroId,
   });
+
+  // Autocompletar monto al seleccionar servicio/categoría
+  useEffect(() => {
+    if (categoriaSeleccionadaId) {
+      const categoria = categorias.find((c) => c.id === categoriaSeleccionadaId);
+      if (categoria && categoria.precio !== null && categoria.precio !== undefined) {
+        setValue("monto", categoria.precio.toString(), { shouldValidate: true });
+      }
+    }
+  }, [categoriaSeleccionadaId, categorias, setValue]);
 
   const createMutation = useMutation({
     mutationFn: async (data: TransaccionFormData) => {
@@ -150,219 +163,253 @@ function TransaccionesContent() {
         <div className="flex items-center gap-3 flex-wrap">
           <button
             className="btn-primary btn-pressable flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs tracking-wider uppercase"
-            onClick={() => { setShowForm(!showForm); reset(); }}
+            onClick={() => { setShowForm(true); reset(); }}
             id="nueva-transaccion-btn"
           >
             <Plus size={15} strokeWidth={3} />
-            <span>{showForm ? "Cancelar" : "Nueva transacción"}</span>
+            <span>Nueva transacción</span>
           </button>
         </div>
       </div>
 
-      {/* Formulario como Tarjeta Flotante Independiente */}
-      <AnimatePresence>
-        {showForm && (
-          <motion.div
-            className="glass-card overflow-hidden border border-[var(--border)] shadow-xl"
-            initial={{ opacity: 0, y: -16, height: 0 }}
-            animate={{ opacity: 1, y: 0, height: "auto" }}
-            exit={{ opacity: 0, y: -16, height: 0 }}
-            transition={{ duration: 0.35, ease: [0.32, 0.94, 0.6, 1] }}
-          >
-            <div className="pb-1">
-              <h3 className="form-card-title text-base font-extrabold tracking-tight mb-5">Registrar Transacción</h3>
-              <form onSubmit={handleSubmit((d) => createMutation.mutate(d))} noValidate>
-                <div className="form-grid">
-                  {/* Tipo */}
-                  <div className="form-group span-full">
-                    <label className="form-label">
-                      Tipo <span className="req">*</span>
-                    </label>
-                    <div className="relative flex bg-[var(--bg-subtle)] border border-[var(--border)] rounded-2xl p-1 gap-1">
-                      <label className="relative flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-xl text-xs font-extrabold cursor-pointer transition-colors z-10">
-                        <input type="radio" value="ingreso" {...register("tipo")} style={{ display: "none" }} />
-                        <ArrowUpCircle size={16} className={tipoSeleccionado === "ingreso" ? "text-[#10b981]" : "text-[var(--text-muted)]"} />
-                        <span className={tipoSeleccionado === "ingreso" ? "text-[#10b981]" : "text-[var(--text-muted)]"}>Ingreso</span>
-                        {tipoSeleccionado === "ingreso" && (
-                          <motion.div
-                            layoutId="activeTipo"
-                            className="absolute inset-0 bg-[#10b981]/10 border border-[#10b981]/20 rounded-xl z-[-1]"
-                            transition={{ type: "spring", stiffness: 380, damping: 30 }}
-                          />
-                        )}
-                      </label>
-                      <label className="relative flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-xl text-xs font-extrabold cursor-pointer transition-colors z-10">
-                        <input type="radio" value="egreso" {...register("tipo")} style={{ display: "none" }} />
-                        <ArrowDownCircle size={16} className={tipoSeleccionado === "egreso" ? "text-red-400" : "text-[var(--text-muted)]"} />
-                        <span className={tipoSeleccionado === "egreso" ? "text-red-400" : "text-[var(--text-muted)]"}>Egreso</span>
-                        {tipoSeleccionado === "egreso" && (
-                          <motion.div
-                            layoutId="activeTipo"
-                            className="absolute inset-0 bg-red-400/10 border border-red-400/20 rounded-xl z-[-1]"
-                            transition={{ type: "spring", stiffness: 380, damping: 30 }}
-                          />
-                        )}
-                      </label>
+      {/* Modal de Nueva Transacción */}
+      <Dialog.Root open={showForm} onOpenChange={(open) => { if (!open) { reset(); setComprobanteUrl(null); } setShowForm(open); }}>
+        <Dialog.Portal>
+          <AnimatePresence>
+            {showForm && (
+              <>
+                <Dialog.Overlay asChild>
+                  <motion.div
+                    className="fixed inset-0 bg-black/60 z-[300] backdrop-blur-md"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.2 }}
+                  />
+                </Dialog.Overlay>
+                <Dialog.Content asChild>
+                  <motion.div
+                    className="fixed top-1/2 left-1/2 w-full max-w-5xl z-[301] outline-none p-4"
+                    initial={{ opacity: 0, scale: 0.95, x: "-50%", y: "-48%" }}
+                    animate={{ opacity: 1, scale: 1, x: "-50%", y: "-50%" }}
+                    exit={{ opacity: 0, scale: 0.95, x: "-50%", y: "-48%" }}
+                    transition={{ duration: 0.3, ease: [0.32, 0.72, 0, 1] }}
+                  >
+                    {/* Box double-bezel wrapper */}
+                    <div className="p-1.5 bg-white/5 dark:bg-white/5 border border-white/10 dark:border-white/5 rounded-[28px] shadow-2xl backdrop-blur-xl">
+                      <div className="bg-white/95 dark:bg-[#131b2e]/95 border border-white/10 dark:border-white/5 rounded-[22px] p-6 text-[var(--text)]">
+                        <div className="flex items-center justify-between mb-4 pb-3 border-b border-[var(--border)]">
+                          <Dialog.Title className="text-lg font-extrabold tracking-tight">
+                            Registrar Transacción
+                          </Dialog.Title>
+                          <Dialog.Close asChild>
+                            <button
+                              type="button"
+                              className="icon-btn btn-pressable flex items-center justify-center w-8 h-8 rounded-full border border-[var(--border)] hover:bg-[var(--surface-hover)] transition-all"
+                              aria-label="Cerrar"
+                            >
+                              <X size={14} />
+                            </button>
+                          </Dialog.Close>
+                        </div>
+                        <form onSubmit={handleSubmit((d) => createMutation.mutate(d))} noValidate>
+                          <div className="form-grid">
+                            {/* Tipo */}
+                            <div className="form-group span-full">
+                              <label className="form-label">
+                                Tipo <span className="req">*</span>
+                              </label>
+                              <div className="relative flex bg-[var(--bg-subtle)] border border-[var(--border)] rounded-2xl p-1 gap-1">
+                                <label className="relative flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-xl text-xs font-extrabold cursor-pointer transition-colors z-10">
+                                  <input type="radio" value="ingreso" {...register("tipo")} style={{ display: "none" }} />
+                                  <ArrowUpCircle size={16} className={tipoSeleccionado === "ingreso" ? "text-[#10b981]" : "text-[var(--text-muted)]"} />
+                                  <span className={tipoSeleccionado === "ingreso" ? "text-[#10b981]" : "text-[var(--text-muted)]"}>Ingreso</span>
+                                  {tipoSeleccionado === "ingreso" && (
+                                    <motion.div
+                                      layoutId="activeTipo"
+                                      className="absolute inset-0 bg-[#10b981]/10 border border-[#10b981]/20 rounded-xl z-[-1]"
+                                      transition={{ type: "spring", stiffness: 380, damping: 30 }}
+                                    />
+                                  )}
+                                </label>
+                                <label className="relative flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-xl text-xs font-extrabold cursor-pointer transition-colors z-10">
+                                  <input type="radio" value="egreso" {...register("tipo")} style={{ display: "none" }} />
+                                  <ArrowDownCircle size={16} className={tipoSeleccionado === "egreso" ? "text-red-400" : "text-[var(--text-muted)]"} />
+                                  <span className={tipoSeleccionado === "egreso" ? "text-red-400" : "text-[var(--text-muted)]"}>Egreso</span>
+                                  {tipoSeleccionado === "egreso" && (
+                                    <motion.div
+                                      layoutId="activeTipo"
+                                      className="absolute inset-0 bg-red-400/10 border border-red-400/20 rounded-xl z-[-1]"
+                                      transition={{ type: "spring", stiffness: 380, damping: 30 }}
+                                    />
+                                  )}
+                                </label>
+                              </div>
+                            </div>
+
+                            {/* Monto */}
+                            <div className="form-group">
+                              <label className="form-label" htmlFor="monto">
+                                Monto (L) <span className="req">*</span>
+                              </label>
+                              <input
+                                id="monto"
+                                type="text"
+                                inputMode="decimal"
+                                className={`form-input ${errors.monto ? "error" : ""}`}
+                                placeholder="0.00"
+                                onKeyDown={(e) => {
+                                  if (
+                                    !/[\d.,]/.test(e.key) &&
+                                    !["Backspace", "Tab", "ArrowLeft", "ArrowRight", "Delete"].includes(e.key)
+                                  ) {
+                                    e.preventDefault();
+                                  }
+                                }}
+                                {...register("monto")}
+                              />
+                              {errors.monto && <p className="form-error">{errors.monto.message}</p>}
+                            </div>
+
+                            {/* Fecha */}
+                            <div className="form-group">
+                              <label className="form-label" htmlFor="fecha">
+                                Fecha <span className="req">*</span>
+                              </label>
+                              <input
+                                id="fecha"
+                                type="date"
+                                className={`form-input ${errors.fecha ? "error" : ""}`}
+                                {...register("fecha")}
+                              />
+                              {errors.fecha && <p className="form-error">{errors.fecha.message}</p>}
+                            </div>
+
+                            {/* Método de pago */}
+                            <div className="form-group">
+                              <label className="form-label" htmlFor="metodo_pago">
+                                Método de pago <span className="req">*</span>
+                              </label>
+                              <select
+                                id="metodo_pago"
+                                className={`form-input form-select ${errors.metodo_pago ? "error" : ""}`}
+                                {...register("metodo_pago")}
+                              >
+                                <option value="">Seleccionar...</option>
+                                <option value="efectivo">Efectivo</option>
+                                <option value="transferencia">Transferencia</option>
+                                <option value="tarjeta">Tarjeta</option>
+                              </select>
+                              {errors.metodo_pago && <p className="form-error">{errors.metodo_pago.message}</p>}
+                            </div>
+
+                            {/* Categoría */}
+                            <div className="form-group">
+                              <label className="form-label" htmlFor="servicio_categoria_id">
+                                Categoría <span className="req">*</span>
+                              </label>
+                              <select
+                                id="servicio_categoria_id"
+                                className={`form-input form-select ${errors.servicio_categoria_id ? "error" : ""}`}
+                                {...register("servicio_categoria_id")}
+                              >
+                                <option value="">Seleccionar...</option>
+                                {categoriasFiltradas.map((c) => (
+                                  <option key={c.id} value={c.id}>
+                                    {c.nombre}
+                                  </option>
+                                ))}
+                              </select>
+                              {errors.servicio_categoria_id && (
+                                <p className="form-error">{errors.servicio_categoria_id.message}</p>
+                              )}
+                            </div>
+
+                            {/* Paciente (solo ingreso) */}
+                            <AnimatePresence>
+                              {tipoSeleccionado === "ingreso" && (
+                                <motion.div
+                                  className="form-group"
+                                  initial={{ opacity: 0, y: -8 }}
+                                  animate={{ opacity: 1, y: 0 }}
+                                  exit={{ opacity: 0, y: -8 }}
+                                  transition={{ duration: 0.2 }}
+                                >
+                                  <label className="form-label" htmlFor="paciente_id">
+                                    Paciente
+                                  </label>
+                                  <select
+                                    id="paciente_id"
+                                    className="form-input form-select"
+                                    {...register("paciente_id")}
+                                  >
+                                    <option value="">Ninguno / General</option>
+                                    {pacientes.map((p) => (
+                                      <option key={p.id} value={p.id}>
+                                        {p.nombre_completo}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </motion.div>
+                              )}
+                            </AnimatePresence>
+
+                            {/* Detalle */}
+                            <div className="form-group span-full">
+                              <label className="form-label" htmlFor="detalle">
+                                Detalle / Notas
+                              </label>
+                              <textarea
+                                id="detalle"
+                                className="form-input form-textarea"
+                                placeholder="Descripción opcional..."
+                                rows={2}
+                                {...register("detalle")}
+                              />
+                            </div>
+
+                            {/* Comprobante */}
+                            <div className="form-group span-full">
+                              <label className="form-label">Comprobante / Recibo</label>
+                              <FileUploader
+                                centroId={centroId!}
+                                onUpload={(url) => setComprobanteUrl(url)}
+                                currentUrl={comprobanteUrl}
+                              />
+                            </div>
+                          </div>
+
+                          {createMutation.isError && (
+                            <p className="form-error">Error al guardar. Inténtalo de nuevo.</p>
+                          )}
+
+                          <div className="form-actions mt-5">
+                            <Dialog.Close asChild>
+                              <button
+                                type="button"
+                                className="btn-ghost btn-pressable items-center px-4 py-2 text-sm font-semibold rounded-lg"
+                              >
+                                Cancelar
+                              </button>
+                            </Dialog.Close>
+                            <button
+                              type="submit"
+                              className="btn-primary btn-pressable px-4 py-2 text-sm font-semibold rounded-lg"
+                              disabled={createMutation.isPending}
+                            >
+                              {createMutation.isPending ? <span className="btn-spinner" /> : "Guardar transacción"}
+                            </button>
+                          </div>
+                        </form>
+                      </div>
                     </div>
-                  </div>
-
-                  {/* Monto */}
-                  <div className="form-group">
-                    <label className="form-label" htmlFor="monto">
-                      Monto (L) <span className="req">*</span>
-                    </label>
-                    <input
-                      id="monto"
-                      type="text"
-                      inputMode="decimal"
-                      className={`form-input ${errors.monto ? "error" : ""}`}
-                      placeholder="0.00"
-                      onKeyDown={(e) => {
-                        if (
-                          !/[\d.,]/.test(e.key) &&
-                          !["Backspace", "Tab", "ArrowLeft", "ArrowRight", "Delete"].includes(e.key)
-                        ) {
-                          e.preventDefault();
-                        }
-                      }}
-                      {...register("monto")}
-                    />
-                    {errors.monto && <p className="form-error">{errors.monto.message}</p>}
-                  </div>
-
-                  {/* Fecha */}
-                  <div className="form-group">
-                    <label className="form-label" htmlFor="fecha">
-                      Fecha <span className="req">*</span>
-                    </label>
-                    <input
-                      id="fecha"
-                      type="date"
-                      className={`form-input ${errors.fecha ? "error" : ""}`}
-                      {...register("fecha")}
-                    />
-                    {errors.fecha && <p className="form-error">{errors.fecha.message}</p>}
-                  </div>
-
-                  {/* Método de pago */}
-                  <div className="form-group">
-                    <label className="form-label" htmlFor="metodo_pago">
-                      Método de pago <span className="req">*</span>
-                    </label>
-                    <select
-                      id="metodo_pago"
-                      className={`form-input form-select ${errors.metodo_pago ? "error" : ""}`}
-                      {...register("metodo_pago")}
-                    >
-                      <option value="">Seleccionar...</option>
-                      <option value="efectivo">Efectivo</option>
-                      <option value="transferencia">Transferencia</option>
-                      <option value="tarjeta">Tarjeta</option>
-                    </select>
-                    {errors.metodo_pago && <p className="form-error">{errors.metodo_pago.message}</p>}
-                  </div>
-
-                  {/* Categoría */}
-                  <div className="form-group">
-                    <label className="form-label" htmlFor="servicio_categoria_id">
-                      Categoría <span className="req">*</span>
-                    </label>
-                    <select
-                      id="servicio_categoria_id"
-                      className={`form-input form-select ${errors.servicio_categoria_id ? "error" : ""}`}
-                      {...register("servicio_categoria_id")}
-                    >
-                      <option value="">Seleccionar...</option>
-                      {categoriasFiltradas.map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.nombre}
-                        </option>
-                      ))}
-                    </select>
-                    {errors.servicio_categoria_id && (
-                      <p className="form-error">{errors.servicio_categoria_id.message}</p>
-                    )}
-                  </div>
-
-                  {/* Paciente (solo ingreso) */}
-                  <AnimatePresence>
-                    {tipoSeleccionado === "ingreso" && (
-                      <motion.div
-                        className="form-group"
-                        initial={{ opacity: 0, y: -8 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -8 }}
-                        transition={{ duration: 0.2 }}
-                      >
-                        <label className="form-label" htmlFor="paciente_id">
-                          Paciente
-                        </label>
-                        <select
-                          id="paciente_id"
-                          className="form-input form-select"
-                          {...register("paciente_id")}
-                        >
-                          <option value="">Ninguno / General</option>
-                          {pacientes.map((p) => (
-                            <option key={p.id} value={p.id}>
-                              {p.nombre_completo}
-                            </option>
-                          ))}
-                        </select>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-
-                  {/* Detalle */}
-                  <div className="form-group span-full">
-                    <label className="form-label" htmlFor="detalle">
-                      Detalle / Notas
-                    </label>
-                    <textarea
-                      id="detalle"
-                      className="form-input form-textarea"
-                      placeholder="Descripción opcional..."
-                      rows={2}
-                      {...register("detalle")}
-                    />
-                  </div>
-
-                  {/* Comprobante */}
-                  <div className="form-group span-full">
-                    <label className="form-label">Comprobante / Recibo</label>
-                    <FileUploader
-                      centroId={centroId!}
-                      onUpload={(url) => setComprobanteUrl(url)}
-                      currentUrl={comprobanteUrl}
-                    />
-                  </div>
-                </div>
-
-                {createMutation.isError && (
-                  <p className="form-error">Error al guardar. Inténtalo de nuevo.</p>
-                )}
-
-                <div className="form-actions mt-5">
-                  <button
-                    type="button"
-                    className="btn-ghost btn-pressable"
-                    onClick={() => { setShowForm(false); reset(); }}
-                  >
-                    Cancelar
-                  </button>
-                  <button
-                    type="submit"
-                    className="btn-primary btn-pressable"
-                    disabled={createMutation.isPending}
-                  >
-                    {createMutation.isPending ? <span className="btn-spinner" /> : "Guardar transacción"}
-                  </button>
-                </div>
-              </form>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+                  </motion.div>
+                </Dialog.Content>
+              </>
+            )}
+          </AnimatePresence>
+        </Dialog.Portal>
+      </Dialog.Root>
 
       {/* Historial Card (Double Bezel Layout & Apple Glassmorphism) */}
       <div className="p-1.5 bg-white/5 dark:bg-white/5 border border-white/10 dark:border-white/5 rounded-[28px] shadow-2xl backdrop-blur-xl">
@@ -523,7 +570,7 @@ function TransaccionesContent() {
           display: flex;
           flex-direction: column;
           gap: 2.5rem;
-          max-width: 1400px;
+          max-width: 1600px;
         }
 
         .page-title {

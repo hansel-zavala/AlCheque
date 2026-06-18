@@ -335,7 +335,7 @@ export default function ReportesPage() {
       </div>
 
       <style jsx>{`
-        .page { display: flex; flex-direction: column; gap: 1.5rem; max-width: 1400px; }
+        .page { display: flex; flex-direction: column; gap: 1.5rem; max-width: 1600px; }
         .page-title { color: var(--text); letter-spacing: -0.025em; }
 
         .btn-ghost {

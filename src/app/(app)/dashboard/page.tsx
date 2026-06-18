@@ -291,7 +291,7 @@ export default function DashboardPage() {
           display: flex;
           flex-direction: column;
           gap: 1.5rem;
-          max-width: 1400px;
+          max-width: 1600px;
         }
 
         .kpi-grid {

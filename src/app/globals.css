@@ -44,6 +44,7 @@
 
 :root,
 [data-theme="dark"] {
+  color-scheme: dark;
   --bg:              #0b1326;
   --bg-subtle:       #131b2e;
   --surface:         #171f33;
@@ -63,6 +64,7 @@
    ============================================================ */
 
 [data-theme="light"] {
+  color-scheme: light;
   --bg:              #f3f7f4;
   --bg-subtle:       #e6eee9;
   --surface:         #ffffff;
@@ -288,6 +290,16 @@ select.form-input {
   background: var(--bg-subtle) !important;
   color: var(--text) !important;
   border: 1.5px solid var(--border) !important;
+}
+
+select.form-input option {
+  background-color: var(--bg-subtle) !important;
+  color: var(--text) !important;
+}
+
+[data-theme="light"] select.form-input option {
+  background-color: var(--surface) !important;
+  color: var(--text) !important;
 }
 
 select.form-input:focus {

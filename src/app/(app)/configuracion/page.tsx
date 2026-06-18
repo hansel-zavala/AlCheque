@@ -607,7 +607,7 @@ export default function ConfiguracionPage() {
       )}
 
       <style jsx>{`
-        .page { display: flex; flex-direction: column; gap: 1.5rem; max-width: 1100px; }
+        .page { display: flex; flex-direction: column; gap: 1.5rem; max-width: 1600px; }
         .page-title { color: var(--text); letter-spacing: -0.025em; }
 
         .tabs {
