@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Plus, Search, UserCheck, Trash2, Filter, Users, ShieldAlert, CircleUserRound, ToggleLeft, ToggleRight, X } from "lucide-react";
+import { Plus, Search, UserCheck, Trash2, Filter, Users, ShieldAlert, CircleUserRound, ToggleLeft, ToggleRight, X, Pencil } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
@@ -44,10 +44,52 @@ export default function PacientesPage() {
     register,
     handleSubmit,
     reset,
+    setValue,
     formState: { errors },
   } = useForm<PacienteFormData>({
     resolver: zodResolver(pacienteSchema),
     defaultValues: { estado_suscripcion: "activo" },
+  });
+
+  const [showNuevoPlanForm, setShowNuevoPlanForm] = useState(false);
+  const [nuevoPlanNombre, setNuevoPlanNombre] = useState("");
+  const [nuevoPlanCategoria, setNuevoPlanCategoria] = useState("");
+  const [nuevoPlanPrecio, setNuevoPlanPrecio] = useState("");
+
+  const createPlanRapidoMutation = useMutation({
+    mutationFn: async () => {
+      if (!centroId) throw new Error();
+      if (!nuevoPlanNombre || !nuevoPlanCategoria) throw new Error("Campos requeridos vacíos");
+      
+      const { data, error } = await supabase
+        .from("servicios_categorias")
+        .insert({
+          centro_id: centroId,
+          nombre: nuevoPlanNombre,
+          tipo: "ingreso",
+          categoria: nuevoPlanCategoria,
+          precio: nuevoPlanPrecio ? parseFloat(nuevoPlanPrecio) : null,
+          activo: true,
+        })
+        .select()
+        .single();
+        
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["planes"] });
+      queryClient.invalidateQueries({ queryKey: ["servicios"] });
+      
+      if (data && data.id) {
+        setValue("plan_id", data.id);
+      }
+      
+      setNuevoPlanNombre("");
+      setNuevoPlanCategoria("");
+      setNuevoPlanPrecio("");
+      setShowNuevoPlanForm(false);
+    },
   });
 
   const { data: pacientes = [], isLoading } = useQuery({
@@ -58,6 +100,7 @@ export default function PacientesPage() {
         .from("pacientes")
         .select("*, servicios_categorias(id, nombre, precio)")
         .eq("centro_id", centroId)
+        .is("deleted_at", null)
         .order("nombre_completo");
 
       if (filtroEstado !== "todos") q = q.eq("estado_suscripcion", filtroEstado);
@@ -79,6 +122,7 @@ export default function PacientesPage() {
         .eq("centro_id", centroId)
         .eq("tipo", "ingreso")
         .eq("activo", true)
+        .is("deleted_at", null)
         .order("nombre");
       return (data ?? []) as ServicioCategoria[];
     },
@@ -109,9 +153,38 @@ export default function PacientesPage() {
     },
   });
 
+  const updateMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: PacienteFormData }) => {
+      const { error } = await supabase
+        .from("pacientes")
+        .update({
+          nombre_completo: data.nombre_completo,
+          email: data.email || null,
+          telefono: data.telefono || null,
+          fecha_nacimiento: data.fecha_nacimiento || null,
+          estado_suscripcion: data.estado_suscripcion,
+          plan_id: data.plan_id || null,
+          notas: data.notas || null,
+          estado_mensualidad: data.estado_suscripcion === "activo",
+        })
+        .eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["pacientes"] });
+      queryClient.invalidateQueries({ queryKey: ["pacientes-activos"] });
+      reset();
+      setEditingId(null);
+      setShowForm(false);
+    },
+  });
+
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from("pacientes").delete().eq("id", id);
+      const { error } = await supabase
+        .from("pacientes")
+        .update({ deleted_at: new Date().toISOString() })
+        .eq("id", id);
       if (error) throw error;
     },
     onSuccess: () => {
@@ -240,7 +313,7 @@ export default function PacientesPage() {
           </div>
 
           {/* Modal de Nuevo Paciente */}
-          <Dialog.Root open={showForm} onOpenChange={(open) => { if (!open) reset(); setShowForm(open); }}>
+          <Dialog.Root open={showForm} onOpenChange={(open) => { if (!open) { reset(); setEditingId(null); } setShowForm(open); }}>
             <Dialog.Portal>
               <AnimatePresence>
                 {showForm && (
@@ -266,9 +339,14 @@ export default function PacientesPage() {
                         <div className="p-1.5 bg-white/5 dark:bg-white/5 border border-white/10 dark:border-white/5 rounded-[28px] shadow-2xl backdrop-blur-xl">
                           <div className="bg-white/95 dark:bg-[#131b2e]/95 border border-white/10 dark:border-white/5 rounded-[22px] p-6 text-[var(--text)]">
                             <div className="flex items-center justify-between mb-4 pb-3 border-b border-[var(--border)]">
-                              <Dialog.Title className="text-lg font-extrabold tracking-tight">
-                                Nuevo Paciente
-                              </Dialog.Title>
+                              <div>
+                                <Dialog.Title className="text-lg font-extrabold tracking-tight">
+                                  {editingId ? "Editar Paciente" : "Nuevo Paciente"}
+                                </Dialog.Title>
+                                <Dialog.Description className="sr-only">
+                                  {editingId ? "Formulario para editar los datos de un paciente existente." : "Formulario para registrar los datos de un nuevo paciente."}
+                                </Dialog.Description>
+                              </div>
                               <Dialog.Close asChild>
                                 <button
                                   type="button"
@@ -279,7 +357,13 @@ export default function PacientesPage() {
                                 </button>
                               </Dialog.Close>
                             </div>
-                            <form onSubmit={handleSubmit((d) => createMutation.mutate(d))} noValidate>
+                            <form onSubmit={handleSubmit((d) => {
+                              if (editingId) {
+                                updateMutation.mutate({ id: editingId, data: d });
+                              } else {
+                                createMutation.mutate(d);
+                              }
+                            })} noValidate>
                               <div className="form-grid">
                                 <div className="form-group span-full">
                                   <label className="form-label" htmlFor="nombre_completo">
@@ -332,16 +416,26 @@ export default function PacientesPage() {
 
                                 <div className="form-group">
                                   <label className="form-label" htmlFor="plan_id">Plan / Servicio</label>
-                                  <select
-                                    id="plan_id"
-                                    className="form-input form-select"
-                                    {...register("plan_id")}
-                                  >
-                                    <option value="">Sin plan específico</option>
-                                    {planes.map((p) => (
-                                      <option key={p.id} value={p.id}>{p.nombre}</option>
-                                    ))}
-                                  </select>
+                                  <div className="flex gap-2">
+                                    <select
+                                      id="plan_id"
+                                      className="form-input form-select flex-1"
+                                      {...register("plan_id")}
+                                    >
+                                      <option value="">Sin plan específico</option>
+                                      {planes.map((p) => (
+                                        <option key={p.id} value={p.id}>{p.nombre}</option>
+                                      ))}
+                                    </select>
+                                    <button
+                                      type="button"
+                                      className="icon-btn btn-pressable flex items-center justify-center h-[38px] w-[38px] rounded-lg border border-[var(--border)] bg-white/5 hover:bg-white/10 text-[var(--text)] transition-colors flex-shrink-0"
+                                      onClick={() => setShowNuevoPlanForm(true)}
+                                      title="Nuevo Plan"
+                                    >
+                                      <Plus size={16} />
+                                    </button>
+                                  </div>
                                 </div>
 
                                 <div className="form-group">
@@ -383,9 +477,126 @@ export default function PacientesPage() {
                                 <button
                                   type="submit"
                                   className="btn-primary btn-pressable px-4 py-2 text-sm font-semibold rounded-lg"
-                                  disabled={createMutation.isPending}
+                                  disabled={createMutation.isPending || updateMutation.isPending}
                                 >
-                                  {createMutation.isPending ? <span className="btn-spinner" /> : "Guardar paciente"}
+                                  {createMutation.isPending || updateMutation.isPending ? (
+                                    <span className="btn-spinner" />
+                                  ) : editingId ? (
+                                    "Guardar cambios"
+                                  ) : (
+                                    "Guardar paciente"
+                                  )}
+                                </button>
+                              </div>
+                            </form>
+                          </div>
+                        </div>
+                      </motion.div>
+                    </Dialog.Content>
+                  </>
+                )}
+              </AnimatePresence>
+            </Dialog.Portal>
+          </Dialog.Root>
+
+          {/* Sub-modal de Rápido Plan */}
+          <Dialog.Root open={showNuevoPlanForm} onOpenChange={(open) => { if (!open) { setNuevoPlanNombre(""); setNuevoPlanCategoria(""); setNuevoPlanPrecio(""); } setShowNuevoPlanForm(open); }}>
+            <Dialog.Portal>
+              <AnimatePresence>
+                {showNuevoPlanForm && (
+                  <>
+                    <Dialog.Overlay asChild>
+                      <motion.div
+                        className="fixed inset-0 bg-black/70 z-[400] backdrop-blur-sm"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        transition={{ duration: 0.2 }}
+                      />
+                    </Dialog.Overlay>
+                    <Dialog.Content asChild>
+                      <motion.div
+                        className="fixed top-1/2 left-1/2 w-full max-w-md z-[401] outline-none p-4"
+                        initial={{ opacity: 0, scale: 0.95, x: "-50%", y: "-48%" }}
+                        animate={{ opacity: 1, scale: 1, x: "-50%", y: "-50%" }}
+                        exit={{ opacity: 0, scale: 0.95, x: "-50%", y: "-48%" }}
+                        transition={{ duration: 0.3, ease: [0.32, 0.72, 0, 1] }}
+                      >
+                        <div className="p-1.5 bg-white/5 dark:bg-white/5 border border-white/10 dark:border-white/5 rounded-[24px] shadow-2xl backdrop-blur-xl">
+                          <div className="bg-white/95 dark:bg-[#131b2e]/95 border border-white/10 dark:border-white/5 rounded-[18px] p-5 text-[var(--text)]">
+                            <div className="flex items-center justify-between mb-4 pb-2 border-b border-[var(--border)]">
+                              <div>
+                                <Dialog.Title className="text-md font-extrabold tracking-tight">
+                                  Crear Nuevo Plan
+                                </Dialog.Title>
+                                <Dialog.Description className="sr-only">
+                                  Formulario para registrar un nuevo plan rápidamente.
+                                </Dialog.Description>
+                              </div>
+                              <Dialog.Close asChild>
+                                <button
+                                  type="button"
+                                  className="icon-btn btn-pressable flex items-center justify-center w-7 h-7 rounded-full border border-[var(--border)] hover:bg-[var(--surface-hover)] transition-all"
+                                  aria-label="Cerrar"
+                                >
+                                  <X size={12} />
+                                </button>
+                              </Dialog.Close>
+                            </div>
+                            <form onSubmit={(e) => { e.preventDefault(); createPlanRapidoMutation.mutate(); }}>
+                              <div className="flex flex-col gap-3">
+                                <div className="form-group">
+                                  <label className="form-label text-xs font-bold" htmlFor="quick-plan-nombre">Nombre <span className="req">*</span></label>
+                                  <input
+                                    id="quick-plan-nombre"
+                                    type="text"
+                                    className="form-input text-xs py-1.5 px-3 rounded-lg"
+                                    placeholder="Ej. Plan Semanal 2 Sesiones"
+                                    required
+                                    value={nuevoPlanNombre}
+                                    onChange={(e) => setNuevoPlanNombre(e.target.value)}
+                                  />
+                                </div>
+                                <div className="form-group">
+                                  <label className="form-label text-xs font-bold" htmlFor="quick-plan-categoria">Categoría <span className="req">*</span></label>
+                                  <input
+                                    id="quick-plan-categoria"
+                                    type="text"
+                                    className="form-input text-xs py-1.5 px-3 rounded-lg"
+                                    placeholder="Ej. Mensualidades"
+                                    required
+                                    value={nuevoPlanCategoria}
+                                    onChange={(e) => setNuevoPlanCategoria(e.target.value)}
+                                  />
+                                </div>
+                                <div className="form-group">
+                                  <label className="form-label text-xs font-bold" htmlFor="quick-plan-precio">Precio mensual (L)</label>
+                                  <input
+                                    id="quick-plan-precio"
+                                    type="text"
+                                    inputMode="decimal"
+                                    className="form-input text-xs py-1.5 px-3 rounded-lg"
+                                    placeholder="0.00"
+                                    value={nuevoPlanPrecio}
+                                    onChange={(e) => setNuevoPlanPrecio(e.target.value)}
+                                  />
+                                </div>
+                              </div>
+                              <div className="form-actions mt-4 pt-3 border-t border-[var(--border)] flex justify-end gap-2">
+                                <Dialog.Close asChild>
+                                  <button
+                                    type="button"
+                                    className="btn-ghost btn-pressable px-3 py-1.5 text-xs font-bold rounded-lg"
+                                  >
+                                    Cancelar
+                                  </button>
+                                </Dialog.Close>
+                                <button
+                                  type="submit"
+                                  className="btn-primary btn-pressable px-3 py-1.5 text-xs font-bold rounded-lg"
+                                  disabled={createPlanRapidoMutation.isPending}
+                                >
+                                  {createPlanRapidoMutation.isPending ? <span className="btn-spinner" /> : "Crear plan"}
                                 </button>
                               </div>
                             </form>
@@ -466,6 +677,25 @@ export default function PacientesPage() {
                             aria-label="Ver perfil"
                           >
                             <CircleUserRound size={15} />
+                          </button>
+                          <button
+                            onClick={() => {
+                              setEditingId(p.id);
+                              reset({
+                                nombre_completo: p.nombre_completo,
+                                email: p.email || "",
+                                telefono: p.telefono || "",
+                                fecha_nacimiento: p.fecha_nacimiento || "",
+                                plan_id: p.plan_id || "",
+                                estado_suscripcion: p.estado_suscripcion,
+                                notas: p.notas || "",
+                              });
+                              setShowForm(true);
+                            }}
+                            className="icon-btn btn-pressable"
+                            aria-label="Editar paciente"
+                          >
+                            <Pencil size={15} />
                           </button>
                           <button
                             className="icon-btn btn-pressable"

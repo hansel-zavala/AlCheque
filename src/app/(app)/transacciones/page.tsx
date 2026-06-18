@@ -4,7 +4,7 @@ import { useState, useEffect, Suspense } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Plus, Trash2, Eye, ArrowUpCircle, ArrowDownCircle, ArrowLeftRight, X } from "lucide-react";
+import { Plus, Trash2, Eye, ArrowUpCircle, ArrowDownCircle, ArrowLeftRight, X, Pencil } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import * as Dialog from "@radix-ui/react-dialog";
@@ -23,6 +23,48 @@ function TransaccionesContent() {
   const [showForm, setShowForm] = useState(false);
   const [filtroTipo, setFiltroTipo] = useState<"todos" | "ingreso" | "egreso">("todos");
   const [comprobanteUrl, setComprobanteUrl] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+
+  const [showNuevaCategoriaForm, setShowNuevaCategoriaForm] = useState(false);
+  const [nuevaCatNombre, setNuevaCatNombre] = useState("");
+  const [nuevaCatCategoria, setNuevaCatCategoria] = useState("");
+  const [nuevaCatPrecio, setNuevaCatPrecio] = useState("");
+
+  const createCategoriaRapidaMutation = useMutation({
+    mutationFn: async () => {
+      if (!centroId) throw new Error();
+      if (!nuevaCatNombre || !nuevaCatCategoria) throw new Error("Campos requeridos vacíos");
+      
+      const { data, error } = await supabase
+        .from("servicios_categorias")
+        .insert({
+          centro_id: centroId,
+          nombre: nuevaCatNombre,
+          tipo: tipoSeleccionado,
+          categoria: nuevaCatCategoria,
+          precio: nuevaCatPrecio ? parseFloat(nuevaCatPrecio) : null,
+          activo: true,
+        })
+        .select()
+        .single();
+        
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["categorias"] });
+      queryClient.invalidateQueries({ queryKey: ["servicios"] });
+      
+      if (data && data.id) {
+        setValue("servicio_categoria_id", data.id);
+      }
+      
+      setNuevaCatNombre("");
+      setNuevaCatCategoria("");
+      setNuevaCatPrecio("");
+      setShowNuevaCategoriaForm(false);
+    },
+  });
 
   const searchParams = useSearchParams();
   useEffect(() => {
@@ -60,6 +102,7 @@ function TransaccionesContent() {
         .from("transacciones")
         .select("*, servicios_categorias(id,nombre,tipo,categoria), pacientes(id,nombre_completo), terapeutas(id,nombre_completo)")
         .eq("centro_id", centroId)
+        .is("deleted_at", null)
         .order("fecha", { ascending: false })
         .order("created_at", { ascending: false })
         .limit(100);
@@ -79,6 +122,7 @@ function TransaccionesContent() {
         .select("*")
         .eq("centro_id", centroId)
         .eq("activo", true)
+        .is("deleted_at", null)
         .order("nombre");
       return (data ?? []) as ServicioCategoria[];
     },
@@ -94,6 +138,7 @@ function TransaccionesContent() {
         .select("id, nombre_completo")
         .eq("centro_id", centroId)
         .eq("estado_suscripcion", "activo")
+        .is("deleted_at", null)
         .order("nombre_completo");
       return (data ?? []) as Pick<Paciente, "id" | "nombre_completo">[];
     },
@@ -137,9 +182,42 @@ function TransaccionesContent() {
     },
   });
 
+  const updateMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: TransaccionFormData }) => {
+      if (!centroId) throw new Error("Sin centro activo");
+      const { error } = await supabase
+        .from("transacciones")
+        .update({
+          tipo: data.tipo,
+          monto: parseFloat(data.monto),
+          metodo_pago: data.metodo_pago,
+          fecha: data.fecha,
+          servicio_categoria_id: data.servicio_categoria_id || null,
+          paciente_id: data.paciente_id || null,
+          terapeuta_id: data.terapeuta_id || null,
+          detalle: data.detalle || null,
+          comprobante_url: comprobanteUrl,
+        })
+        .eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["transacciones"] });
+      queryClient.invalidateQueries({ queryKey: ["transacciones-mes"] });
+      queryClient.invalidateQueries({ queryKey: ["chart-mensual"] });
+      reset();
+      setEditingId(null);
+      setComprobanteUrl(null);
+      setShowForm(false);
+    },
+  });
+
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from("transacciones").delete().eq("id", id);
+      const { error } = await supabase
+        .from("transacciones")
+        .update({ deleted_at: new Date().toISOString() })
+        .eq("id", id);
       if (error) throw error;
     },
     onSuccess: () => {
@@ -173,7 +251,7 @@ function TransaccionesContent() {
       </div>
 
       {/* Modal de Nueva Transacción */}
-      <Dialog.Root open={showForm} onOpenChange={(open) => { if (!open) { reset(); setComprobanteUrl(null); } setShowForm(open); }}>
+      <Dialog.Root open={showForm} onOpenChange={(open) => { if (!open) { reset(); setEditingId(null); setComprobanteUrl(null); } setShowForm(open); }}>
         <Dialog.Portal>
           <AnimatePresence>
             {showForm && (
@@ -199,9 +277,14 @@ function TransaccionesContent() {
                     <div className="p-1.5 bg-white/5 dark:bg-white/5 border border-white/10 dark:border-white/5 rounded-[28px] shadow-2xl backdrop-blur-xl">
                       <div className="bg-white/95 dark:bg-[#131b2e]/95 border border-white/10 dark:border-white/5 rounded-[22px] p-6 text-[var(--text)]">
                         <div className="flex items-center justify-between mb-4 pb-3 border-b border-[var(--border)]">
-                          <Dialog.Title className="text-lg font-extrabold tracking-tight">
-                            Registrar Transacción
-                          </Dialog.Title>
+                          <div>
+                            <Dialog.Title className="text-lg font-extrabold tracking-tight">
+                              {editingId ? "Editar Transacción" : "Registrar Transacción"}
+                            </Dialog.Title>
+                            <Dialog.Description className="sr-only">
+                              {editingId ? "Formulario para editar los datos de una transacción existente." : "Formulario para registrar los detalles de una nueva transacción."}
+                            </Dialog.Description>
+                          </div>
                           <Dialog.Close asChild>
                             <button
                               type="button"
@@ -212,7 +295,13 @@ function TransaccionesContent() {
                             </button>
                           </Dialog.Close>
                         </div>
-                        <form onSubmit={handleSubmit((d) => createMutation.mutate(d))} noValidate>
+                        <form onSubmit={handleSubmit((d) => {
+                          if (editingId) {
+                            updateMutation.mutate({ id: editingId, data: d });
+                          } else {
+                            createMutation.mutate(d);
+                          }
+                        })} noValidate>
                           <div className="form-grid">
                             {/* Tipo */}
                             <div className="form-group span-full">
@@ -304,26 +393,36 @@ function TransaccionesContent() {
                             </div>
 
                             {/* Categoría */}
-                            <div className="form-group">
-                              <label className="form-label" htmlFor="servicio_categoria_id">
-                                Categoría <span className="req">*</span>
-                              </label>
-                              <select
-                                id="servicio_categoria_id"
-                                className={`form-input form-select ${errors.servicio_categoria_id ? "error" : ""}`}
-                                {...register("servicio_categoria_id")}
-                              >
-                                <option value="">Seleccionar...</option>
-                                {categoriasFiltradas.map((c) => (
-                                  <option key={c.id} value={c.id}>
-                                    {c.nombre}
-                                  </option>
-                                ))}
-                              </select>
-                              {errors.servicio_categoria_id && (
-                                <p className="form-error">{errors.servicio_categoria_id.message}</p>
-                              )}
-                            </div>
+                             <div className="form-group">
+                               <label className="form-label" htmlFor="servicio_categoria_id">
+                                 Categoría <span className="req">*</span>
+                               </label>
+                               <div className="flex gap-2">
+                                 <select
+                                   id="servicio_categoria_id"
+                                   className={`form-input form-select flex-1 ${errors.servicio_categoria_id ? "error" : ""}`}
+                                   {...register("servicio_categoria_id")}
+                                 >
+                                   <option value="">Seleccionar...</option>
+                                   {categoriasFiltradas.map((c) => (
+                                     <option key={c.id} value={c.id}>
+                                       {c.nombre}
+                                     </option>
+                                   ))}
+                                 </select>
+                                 <button
+                                   type="button"
+                                   className="icon-btn btn-pressable flex items-center justify-center h-[38px] w-[38px] rounded-lg border border-[var(--border)] bg-white/5 hover:bg-white/10 text-[var(--text)] transition-colors flex-shrink-0"
+                                   onClick={() => setShowNuevaCategoriaForm(true)}
+                                   title="Nueva Categoría"
+                                 >
+                                   <Plus size={16} />
+                                 </button>
+                               </div>
+                               {errors.servicio_categoria_id && (
+                                 <p className="form-error">{errors.servicio_categoria_id.message}</p>
+                               )}
+                             </div>
 
                             {/* Paciente (solo ingreso) */}
                             <AnimatePresence>
@@ -392,12 +491,129 @@ function TransaccionesContent() {
                                 Cancelar
                               </button>
                             </Dialog.Close>
+                             <button
+                               type="submit"
+                               className="btn-primary btn-pressable px-4 py-2 text-sm font-semibold rounded-lg"
+                               disabled={createMutation.isPending || updateMutation.isPending}
+                             >
+                               {createMutation.isPending || updateMutation.isPending ? (
+                                 <span className="btn-spinner" />
+                               ) : editingId ? (
+                                 "Guardar cambios"
+                               ) : (
+                                 "Guardar transacción"
+                               )}
+                             </button>
+                          </div>
+                        </form>
+                      </div>
+                    </div>
+                  </motion.div>
+                </Dialog.Content>
+              </>
+            )}
+          </AnimatePresence>
+        </Dialog.Portal>
+      </Dialog.Root>
+
+      {/* Sub-modal de Rápida Categoría */}
+      <Dialog.Root open={showNuevaCategoriaForm} onOpenChange={(open) => { if (!open) { setNuevaCatNombre(""); setNuevaCatCategoria(""); setNuevaCatPrecio(""); } setShowNuevaCategoriaForm(open); }}>
+        <Dialog.Portal>
+          <AnimatePresence>
+            {showNuevaCategoriaForm && (
+              <>
+                <Dialog.Overlay asChild>
+                  <motion.div
+                    className="fixed inset-0 bg-black/70 z-[400] backdrop-blur-sm"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.2 }}
+                  />
+                </Dialog.Overlay>
+                <Dialog.Content asChild>
+                  <motion.div
+                    className="fixed top-1/2 left-1/2 w-full max-w-md z-[401] outline-none p-4"
+                    initial={{ opacity: 0, scale: 0.95, x: "-50%", y: "-48%" }}
+                    animate={{ opacity: 1, scale: 1, x: "-50%", y: "-50%" }}
+                    exit={{ opacity: 0, scale: 0.95, x: "-50%", y: "-48%" }}
+                    transition={{ duration: 0.3, ease: [0.32, 0.72, 0, 1] }}
+                  >
+                    <div className="p-1.5 bg-white/5 dark:bg-white/5 border border-white/10 dark:border-white/5 rounded-[24px] shadow-2xl backdrop-blur-xl">
+                      <div className="bg-white/95 dark:bg-[#131b2e]/95 border border-white/10 dark:border-white/5 rounded-[18px] p-5 text-[var(--text)]">
+                        <div className="flex items-center justify-between mb-4 pb-2 border-b border-[var(--border)]">
+                          <div>
+                            <Dialog.Title className="text-md font-extrabold tracking-tight">
+                              Crear Nueva Categoría ({tipoSeleccionado === "ingreso" ? "Ingreso" : "Egreso"})
+                            </Dialog.Title>
+                            <Dialog.Description className="sr-only">
+                              Formulario para agregar una nueva categoría de servicio de manera rápida.
+                            </Dialog.Description>
+                          </div>
+                          <Dialog.Close asChild>
+                            <button
+                              type="button"
+                              className="icon-btn btn-pressable flex items-center justify-center w-7 h-7 rounded-full border border-[var(--border)] hover:bg-[var(--surface-hover)] transition-all"
+                              aria-label="Cerrar"
+                            >
+                              <X size={12} />
+                            </button>
+                          </Dialog.Close>
+                        </div>
+                        <form onSubmit={(e) => { e.preventDefault(); createCategoriaRapidaMutation.mutate(); }}>
+                          <div className="flex flex-col gap-3">
+                            <div className="form-group">
+                              <label className="form-label text-xs font-bold" htmlFor="quick-cat-nombre">Nombre <span className="req">*</span></label>
+                              <input
+                                id="quick-cat-nombre"
+                                type="text"
+                                className="form-input text-xs py-1.5 px-3 rounded-lg"
+                                placeholder="Ej. Terapia Física"
+                                required
+                                value={nuevaCatNombre}
+                                onChange={(e) => setNuevaCatNombre(e.target.value)}
+                              />
+                            </div>
+                            <div className="form-group">
+                              <label className="form-label text-xs font-bold" htmlFor="quick-cat-categoria">Categoría <span className="req">*</span></label>
+                              <input
+                                id="quick-cat-categoria"
+                                type="text"
+                                className="form-input text-xs py-1.5 px-3 rounded-lg"
+                                placeholder="Ej. Sesiones"
+                                required
+                                value={nuevaCatCategoria}
+                                onChange={(e) => setNuevaCatCategoria(e.target.value)}
+                              />
+                            </div>
+                            <div className="form-group">
+                              <label className="form-label text-xs font-bold" htmlFor="quick-cat-precio">Precio base (L)</label>
+                              <input
+                                id="quick-cat-precio"
+                                type="text"
+                                inputMode="decimal"
+                                className="form-input text-xs py-1.5 px-3 rounded-lg"
+                                placeholder="0.00"
+                                value={nuevaCatPrecio}
+                                onChange={(e) => setNuevaCatPrecio(e.target.value)}
+                              />
+                            </div>
+                          </div>
+                          <div className="form-actions mt-4 pt-3 border-t border-[var(--border)] flex justify-end gap-2">
+                            <Dialog.Close asChild>
+                              <button
+                                type="button"
+                                className="btn-ghost btn-pressable px-3 py-1.5 text-xs font-bold rounded-lg"
+                              >
+                                Cancelar
+                              </button>
+                            </Dialog.Close>
                             <button
                               type="submit"
-                              className="btn-primary btn-pressable px-4 py-2 text-sm font-semibold rounded-lg"
-                              disabled={createMutation.isPending}
+                              className="btn-primary btn-pressable px-3 py-1.5 text-xs font-bold rounded-lg"
+                              disabled={createCategoriaRapidaMutation.isPending}
                             >
-                              {createMutation.isPending ? <span className="btn-spinner" /> : "Guardar transacción"}
+                              {createCategoriaRapidaMutation.isPending ? <span className="btn-spinner" /> : "Crear categoría"}
                             </button>
                           </div>
                         </form>
@@ -532,6 +748,27 @@ function TransaccionesContent() {
                               <Eye size={14} />
                             </a>
                           )}
+                          <button
+                            onClick={() => {
+                              setEditingId(t.id);
+                              setComprobanteUrl(t.comprobante_url);
+                              reset({
+                                tipo: t.tipo,
+                                monto: t.monto.toString(),
+                                fecha: t.fecha,
+                                metodo_pago: t.metodo_pago,
+                                servicio_categoria_id: t.servicio_categoria_id || "",
+                                paciente_id: t.paciente_id || "",
+                                terapeuta_id: t.terapeuta_id || "",
+                                detalle: t.detalle || "",
+                              });
+                              setShowForm(true);
+                            }}
+                            className="icon-btn"
+                            aria-label="Editar transacción"
+                          >
+                            <Pencil size={14} />
+                          </button>
                           <button
                             className="icon-btn danger"
                             onClick={() => {

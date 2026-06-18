@@ -33,6 +33,7 @@ export default function PacienteDetailPage({ params }: { params: Promise<{ id: s
         .from("pacientes")
         .select("*, servicios_categorias(id, nombre, precio)")
         .eq("id", id)
+        .is("deleted_at", null)
         .single();
       return data as unknown as Paciente & { servicios_categorias?: { nombre: string; precio: number | null } | null };
     },
@@ -45,6 +46,7 @@ export default function PacienteDetailPage({ params }: { params: Promise<{ id: s
         .from("transacciones")
         .select("*, servicios_categorias(id, nombre, categoria)")
         .eq("paciente_id", id)
+        .is("deleted_at", null)
         .order("fecha", { ascending: false })
         .limit(50);
       return (data ?? []) as unknown as TransaccionConRelaciones[];

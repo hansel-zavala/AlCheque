@@ -56,6 +56,7 @@ export interface Database {
           precio: number | null;
           activo: boolean;
           created_at: string;
+          deleted_at: string | null;
         };
         Insert: {
           id?: string;
@@ -66,6 +67,7 @@ export interface Database {
           precio?: number | null;
           activo?: boolean;
           created_at?: string;
+          deleted_at?: string | null;
         };
         Update: {
           nombre?: string;
@@ -73,6 +75,7 @@ export interface Database {
           categoria?: string;
           precio?: number | null;
           activo?: boolean;
+          deleted_at?: string | null;
         };
       };
       terapeutas: {
@@ -85,6 +88,7 @@ export interface Database {
           email: string | null;
           activo: boolean;
           created_at: string;
+          deleted_at: string | null;
         };
         Insert: {
           id?: string;
@@ -95,6 +99,7 @@ export interface Database {
           email?: string | null;
           activo?: boolean;
           created_at?: string;
+          deleted_at?: string | null;
         };
         Update: {
           nombre_completo?: string;
@@ -102,6 +107,7 @@ export interface Database {
           telefono?: string | null;
           email?: string | null;
           activo?: boolean;
+          deleted_at?: string | null;
         };
       };
       pacientes: {
@@ -119,6 +125,7 @@ export interface Database {
           notas: string | null;
           created_at: string;
           updated_at: string;
+          deleted_at: string | null;
         };
         Insert: {
           id?: string;
@@ -134,6 +141,7 @@ export interface Database {
           notas?: string | null;
           created_at?: string;
           updated_at?: string;
+          deleted_at?: string | null;
         };
         Update: {
           nombre_completo?: string;
@@ -145,6 +153,7 @@ export interface Database {
           plan_id?: string | null;
           notas?: string | null;
           updated_at?: string;
+          deleted_at?: string | null;
         };
       };
       transacciones: {
@@ -161,6 +170,7 @@ export interface Database {
           paciente_id: string | null;
           terapeuta_id: string | null;
           created_at: string;
+          deleted_at: string | null;
         };
         Insert: {
           id?: string;
@@ -175,6 +185,7 @@ export interface Database {
           paciente_id?: string | null;
           terapeuta_id?: string | null;
           created_at?: string;
+          deleted_at?: string | null;
         };
         Update: {
           tipo?: "ingreso" | "egreso";
@@ -186,6 +197,7 @@ export interface Database {
           servicio_categoria_id?: string | null;
           paciente_id?: string | null;
           terapeuta_id?: string | null;
+          deleted_at?: string | null;
         };
       };
     };

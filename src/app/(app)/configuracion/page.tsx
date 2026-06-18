@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Building2, Plus, Trash2, Users, Tag, Sun, Moon, Monitor, Check, ShieldAlert, Calendar } from "lucide-react";
+import { Building2, Plus, Trash2, Users, Tag, Sun, Moon, Monitor, Check, ShieldAlert, Calendar, Pencil } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { createClient } from "@/lib/supabase/client";
 import { useCentro } from "@/context/CentroContext";
@@ -33,6 +33,8 @@ export default function ConfiguracionPage() {
   const [showServicioForm, setShowServicioForm] = useState(false);
   const [showTerapeutaForm, setShowTerapeutaForm] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [editingServicioId, setEditingServicioId] = useState<string | null>(null);
+  const [editingTerapeutaId, setEditingTerapeutaId] = useState<string | null>(null);
 
   // Estados locales para los toggles de prueba del sistema
   const [bloquearPeriodo, setBloquearPeriodo] = useState(false);
@@ -86,6 +88,7 @@ export default function ConfiguracionPage() {
         .from("servicios_categorias")
         .select("*")
         .eq("centro_id", centroId)
+        .is("deleted_at", null)
         .order("tipo")
         .order("nombre");
       return (data ?? []) as ServicioCategoria[];
@@ -119,9 +122,36 @@ export default function ConfiguracionPage() {
     },
   });
 
+  const updateServicioMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: ServicioCategoriaFormData }) => {
+      if (!centroId) throw new Error();
+      const { error } = await supabase
+        .from("servicios_categorias")
+        .update({
+          nombre: data.nombre,
+          tipo: data.tipo,
+          categoria: data.categoria,
+          precio: data.precio ? parseFloat(data.precio) : null,
+          activo: data.activo,
+        })
+        .eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["servicios"] });
+      queryClient.invalidateQueries({ queryKey: ["categorias"] });
+      servicioForm.reset();
+      setEditingServicioId(null);
+      setShowServicioForm(false);
+    },
+  });
+
   const deleteServicioMutation = useMutation({
     mutationFn: async (id: string) => {
-      await supabase.from("servicios_categorias").delete().eq("id", id);
+      await supabase
+        .from("servicios_categorias")
+        .update({ deleted_at: new Date().toISOString() })
+        .eq("id", id);
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["servicios"] }),
   });
@@ -135,6 +165,7 @@ export default function ConfiguracionPage() {
         .from("terapeutas")
         .select("*")
         .eq("centro_id", centroId)
+        .is("deleted_at", null)
         .order("nombre_completo");
       return (data ?? []) as Terapeuta[];
     },
@@ -166,9 +197,35 @@ export default function ConfiguracionPage() {
     },
   });
 
+  const updateTerapeutaMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: TerapeutaFormData }) => {
+      if (!centroId) throw new Error();
+      const { error } = await supabase
+        .from("terapeutas")
+        .update({
+          nombre_completo: data.nombre_completo,
+          especialidad: data.especialidad || null,
+          telefono: data.telefono || null,
+          email: data.email || null,
+          activo: data.activo,
+        })
+        .eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["terapeutas"] });
+      terapeutaForm.reset();
+      setEditingTerapeutaId(null);
+      setShowTerapeutaForm(false);
+    },
+  });
+
   const deleteTerapeutaMutation = useMutation({
     mutationFn: async (id: string) => {
-      await supabase.from("terapeutas").delete().eq("id", id);
+      await supabase
+        .from("terapeutas")
+        .update({ deleted_at: new Date().toISOString() })
+        .eq("id", id);
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["terapeutas"] }),
   });
@@ -381,7 +438,13 @@ export default function ConfiguracionPage() {
             <h2 className="config-card-title text-base font-extrabold tracking-tight m-0">Servicios y planes</h2>
             <button
               className="btn-primary btn-pressable flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider"
-              onClick={() => setShowServicioForm(!showServicioForm)}
+              onClick={() => {
+                if (showServicioForm) {
+                  servicioForm.reset();
+                  setEditingServicioId(null);
+                }
+                setShowServicioForm(!showServicioForm);
+              }}
             >
               <Plus size={14} />
               <span>{showServicioForm ? "Cancelar" : "Agregar"}</span>
@@ -397,7 +460,13 @@ export default function ConfiguracionPage() {
                 exit={{ opacity: 0, height: 0, overflow: "hidden" }}
                 transition={{ duration: 0.25 }}
               >
-                <form onSubmit={servicioForm.handleSubmit((d) => createServicioMutation.mutate(d))} noValidate>
+                <form onSubmit={servicioForm.handleSubmit((d) => {
+                  if (editingServicioId) {
+                    updateServicioMutation.mutate({ id: editingServicioId, data: d });
+                  } else {
+                    createServicioMutation.mutate(d);
+                  }
+                })} noValidate>
                   <div className="form-grid">
                     <div className="form-group">
                       <label className="form-label" htmlFor="srv-nombre">Nombre <span className="req">*</span></label>
@@ -431,8 +500,14 @@ export default function ConfiguracionPage() {
                     </div>
                   </div>
                   <div className="form-actions mt-4">
-                    <button type="submit" className="btn-primary btn-pressable" disabled={createServicioMutation.isPending}>
-                      {createServicioMutation.isPending ? <span className="btn-spinner" /> : "Guardar"}
+                    <button type="submit" className="btn-primary btn-pressable px-4 py-2 text-sm font-semibold rounded-lg" disabled={createServicioMutation.isPending || updateServicioMutation.isPending}>
+                      {createServicioMutation.isPending || updateServicioMutation.isPending ? (
+                        <span className="btn-spinner" />
+                      ) : editingServicioId ? (
+                        "Actualizar"
+                      ) : (
+                        "Guardar"
+                      )}
                     </button>
                   </div>
                 </form>
@@ -457,6 +532,23 @@ export default function ConfiguracionPage() {
                     {s.precio && (
                       <span className="item-price text-sm font-bold font-mono text-[var(--accent)]">L {s.precio.toFixed(2)}</span>
                     )}
+                    <button
+                      className="icon-btn btn-pressable"
+                      onClick={() => {
+                        setEditingServicioId(s.id);
+                        servicioForm.reset({
+                          nombre: s.nombre,
+                          tipo: s.tipo,
+                          categoria: s.categoria,
+                          precio: s.precio ? s.precio.toString() : "",
+                          activo: s.activo,
+                        });
+                        setShowServicioForm(true);
+                      }}
+                      aria-label="Editar servicio"
+                    >
+                      <Pencil size={14} />
+                    </button>
                     <button
                       className="icon-btn danger btn-pressable"
                       onClick={() => {
@@ -486,7 +578,13 @@ export default function ConfiguracionPage() {
             <h2 className="config-card-title text-base font-extrabold tracking-tight m-0">Terapeutas</h2>
             <button
               className="btn-primary btn-pressable flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider"
-              onClick={() => setShowTerapeutaForm(!showTerapeutaForm)}
+              onClick={() => {
+                if (showTerapeutaForm) {
+                  terapeutaForm.reset();
+                  setEditingTerapeutaId(null);
+                }
+                setShowTerapeutaForm(!showTerapeutaForm);
+              }}
             >
               <Plus size={14} />
               <span>{showTerapeutaForm ? "Cancelar" : "Agregar"}</span>
@@ -502,7 +600,13 @@ export default function ConfiguracionPage() {
                 exit={{ opacity: 0, height: 0, overflow: "hidden" }}
                 transition={{ duration: 0.25 }}
               >
-                <form onSubmit={terapeutaForm.handleSubmit((d) => createTerapeutaMutation.mutate(d))} noValidate>
+                <form onSubmit={terapeutaForm.handleSubmit((d) => {
+                  if (editingTerapeutaId) {
+                    updateTerapeutaMutation.mutate({ id: editingTerapeutaId, data: d });
+                  } else {
+                    createTerapeutaMutation.mutate(d);
+                  }
+                })} noValidate>
                   <div className="form-grid">
                     <div className="form-group span-full">
                       <label className="form-label" htmlFor="ter-nombre">Nombre completo <span className="req">*</span></label>
@@ -522,8 +626,14 @@ export default function ConfiguracionPage() {
                     </div>
                   </div>
                   <div className="form-actions mt-4">
-                    <button type="submit" className="btn-primary btn-pressable" disabled={createTerapeutaMutation.isPending}>
-                      {createTerapeutaMutation.isPending ? <span className="btn-spinner" /> : "Guardar"}
+                    <button type="submit" className="btn-primary btn-pressable px-4 py-2 text-sm font-semibold rounded-lg" disabled={createTerapeutaMutation.isPending || updateTerapeutaMutation.isPending}>
+                      {createTerapeutaMutation.isPending || updateTerapeutaMutation.isPending ? (
+                        <span className="btn-spinner" />
+                      ) : editingTerapeutaId ? (
+                        "Actualizar"
+                      ) : (
+                        "Guardar"
+                      )}
                     </button>
                   </div>
                 </form>
@@ -550,6 +660,23 @@ export default function ConfiguracionPage() {
                     <span className={`badge ${t.activo ? "badge-green" : "badge-muted"}`}>
                       {t.activo ? "Activo" : "Inactivo"}
                     </span>
+                    <button
+                      className="icon-btn btn-pressable"
+                      onClick={() => {
+                        setEditingTerapeutaId(t.id);
+                        terapeutaForm.reset({
+                          nombre_completo: t.nombre_completo,
+                          especialidad: t.especialidad || "",
+                          telefono: t.telefono || "",
+                          email: t.email || "",
+                          activo: t.activo,
+                        });
+                        setShowTerapeutaForm(true);
+                      }}
+                      aria-label="Editar terapeuta"
+                    >
+                      <Pencil size={14} />
+                    </button>
                     <button
                       className="icon-btn danger btn-pressable"
                       onClick={() => {
