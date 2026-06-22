@@ -339,64 +339,65 @@ function TransaccionesContent() {
                           }
                         })} noValidate>
                           <div className="form-grid">
-                            {/* Tipo */}
-                            <div className="form-group span-full">
-                              <label className="form-label">
-                                Tipo <span className="req">*</span>
-                              </label>
-                              <div className="relative flex bg-[var(--bg-subtle)] border border-[var(--border)] rounded-2xl p-1 gap-1">
-                                <label className="relative flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-xl text-xs font-extrabold cursor-pointer transition-colors z-10">
-                                  <input type="radio" value="ingreso" {...register("tipo")} style={{ display: "none" }} />
-                                  <ArrowUpCircle size={16} className={tipoSeleccionado === "ingreso" ? "text-[#10b981]" : "text-[var(--text-muted)]"} />
-                                  <span className={tipoSeleccionado === "ingreso" ? "text-[#10b981]" : "text-[var(--text-muted)]"}>Ingreso</span>
-                                  {tipoSeleccionado === "ingreso" && (
-                                    <motion.div
-                                      layoutId="activeTipo"
-                                      className="absolute inset-0 bg-[#10b981]/10 border border-[#10b981]/20 rounded-xl z-[-1]"
-                                      transition={{ type: "spring", stiffness: 380, damping: 30 }}
-                                    />
-                                  )}
-                                </label>
-                                <label className="relative flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-xl text-xs font-extrabold cursor-pointer transition-colors z-10">
-                                  <input type="radio" value="egreso" {...register("tipo")} style={{ display: "none" }} />
-                                  <ArrowDownCircle size={16} className={tipoSeleccionado === "egreso" ? "text-red-400" : "text-[var(--text-muted)]"} />
-                                  <span className={tipoSeleccionado === "egreso" ? "text-red-400" : "text-[var(--text-muted)]"}>Egreso</span>
-                                  {tipoSeleccionado === "egreso" && (
-                                    <motion.div
-                                      layoutId="activeTipo"
-                                      className="absolute inset-0 bg-red-400/10 border border-red-400/20 rounded-xl z-[-1]"
-                                      transition={{ type: "spring", stiffness: 380, damping: 30 }}
-                                    />
-                                  )}
-                                </label>
-                              </div>
-                            </div>
+                            {/* Paciente (solo ingreso) */}
+                             <AnimatePresence>
+                               {tipoSeleccionado === "ingreso" && (
+                                 <motion.div
+                                   className="form-group"
+                                   initial={{ opacity: 0, y: -8 }}
+                                   animate={{ opacity: 1, y: 0 }}
+                                   exit={{ opacity: 0, y: -8 }}
+                                   transition={{ duration: 0.2 }}
+                                 >
+                                   <label className="form-label" htmlFor="paciente_id">
+                                     Paciente
+                                   </label>
+                                   <select
+                                     id="paciente_id"
+                                     className="form-input form-select"
+                                     {...register("paciente_id")}
+                                   >
+                                     <option value="">Ninguno / General</option>
+                                     {pacientes.map((p) => (
+                                       <option key={p.id} value={p.id}>
+                                         {p.nombre_completo}
+                                       </option>
+                                     ))}
+                                   </select>
+                                 </motion.div>
+                               )}
+                             </AnimatePresence>
 
-                            {/* Monto */}
-                            <div className="form-group">
-                              <label className="form-label" htmlFor="monto">
-                                Monto (L) <span className="req">*</span>
-                              </label>
-                              <input
-                                id="monto"
-                                type="text"
-                                inputMode="decimal"
-                                className={`form-input ${errors.monto ? "error" : ""}`}
-                                placeholder="0.00"
-                                onKeyDown={(e) => {
-                                  if (
-                                    !/[\d.,]/.test(e.key) &&
-                                    !["Backspace", "Tab", "ArrowLeft", "ArrowRight", "Delete"].includes(e.key)
-                                  ) {
-                                    e.preventDefault();
-                                  }
-                                }}
-                                {...register("monto")}
-                              />
-                              {errors.monto && <p className="form-error">{errors.monto.message}</p>}
-                            </div>
+                             {/* Servicio (solo ingreso) */}
+                             <AnimatePresence>
+                               {tipoSeleccionado === "ingreso" && (
+                                 <motion.div
+                                   className="form-group"
+                                   initial={{ opacity: 0, y: -8 }}
+                                   animate={{ opacity: 1, y: 0 }}
+                                   exit={{ opacity: 0, y: -8 }}
+                                   transition={{ duration: 0.2 }}
+                                 >
+                                   <label className="form-label" htmlFor="servicio_id">
+                                     Servicio / Plan
+                                   </label>
+                                   <select
+                                     id="servicio_id"
+                                     className="form-input form-select"
+                                     {...register("servicio_id")}
+                                   >
+                                     <option value="">General / Ninguno</option>
+                                     {servicios.map((s) => (
+                                       <option key={s.id} value={s.id}>
+                                         {s.nombre} {s.precio ? `(L ${s.precio.toFixed(2)})` : ""}
+                                       </option>
+                                     ))}
+                                   </select>
+                                 </motion.div>
+                               )}
+                             </AnimatePresence>
 
-                            {/* Fecha */}
+                             {/* Fecha */}
                             <div className="form-group">
                               <label className="form-label" htmlFor="fecha">
                                 Fecha <span className="req">*</span>
@@ -428,34 +429,29 @@ function TransaccionesContent() {
                               {errors.metodo_pago && <p className="form-error">{errors.metodo_pago.message}</p>}
                             </div>
 
-                            {/* Servicio (solo ingreso) */}
-                             <AnimatePresence>
-                               {tipoSeleccionado === "ingreso" && (
-                                 <motion.div
-                                   className="form-group"
-                                   initial={{ opacity: 0, y: -8 }}
-                                   animate={{ opacity: 1, y: 0 }}
-                                   exit={{ opacity: 0, y: -8 }}
-                                   transition={{ duration: 0.2 }}
-                                 >
-                                   <label className="form-label" htmlFor="servicio_id">
-                                     Servicio / Plan
-                                   </label>
-                                   <select
-                                     id="servicio_id"
-                                     className="form-input form-select"
-                                     {...register("servicio_id")}
-                                   >
-                                     <option value="">General / Ninguno</option>
-                                     {servicios.map((s) => (
-                                       <option key={s.id} value={s.id}>
-                                         {s.nombre} {s.precio ? `(L ${s.precio.toFixed(2)})` : ""}
-                                       </option>
-                                     ))}
-                                   </select>
-                                 </motion.div>
-                               )}
-                             </AnimatePresence>
+                            {/* Monto */}
+                            <div className="form-group">
+                              <label className="form-label" htmlFor="monto">
+                                Monto (L) <span className="req">*</span>
+                              </label>
+                              <input
+                                id="monto"
+                                type="text"
+                                inputMode="decimal"
+                                className={`form-input ${errors.monto ? "error" : ""}`}
+                                placeholder="0.00"
+                                onKeyDown={(e) => {
+                                  if (
+                                    !/[\d.,]/.test(e.key) &&
+                                    !["Backspace", "Tab", "ArrowLeft", "ArrowRight", "Delete"].includes(e.key)
+                                  ) {
+                                    e.preventDefault();
+                                  }
+                                }}
+                                {...register("monto")}
+                              />
+                              {errors.monto && <p className="form-error">{errors.monto.message}</p>}
+                            </div>
 
                              {/* Categoría */}
                               <div className="form-group">
@@ -477,7 +473,7 @@ function TransaccionesContent() {
                                   </select>
                                   <button
                                     type="button"
-                                    className="icon-btn btn-pressable flex items-center justify-center h-[38px] w-[38px] rounded-lg border border-[var(--border)] bg-white/5 hover:bg-white/10 text-[var(--text)] transition-colors flex-shrink-0"
+                                    className="icon-btn btn-pressable flex items-center justify-center h-[43px] w-[43px] rounded-lg border border-[var(--border)] bg-white/5 hover:bg-white/10 text-[var(--text)] transition-colors flex-shrink-0"
                                     onClick={() => setShowNuevaCategoriaForm(true)}
                                     title="Nueva Categoría"
                                   >
@@ -489,34 +485,38 @@ function TransaccionesContent() {
                                 )}
                               </div>
 
-                             {/* Paciente (solo ingreso) */}
-                             <AnimatePresence>
-                               {tipoSeleccionado === "ingreso" && (
-                                 <motion.div
-                                   className="form-group"
-                                   initial={{ opacity: 0, y: -8 }}
-                                   animate={{ opacity: 1, y: 0 }}
-                                   exit={{ opacity: 0, y: -8 }}
-                                   transition={{ duration: 0.2 }}
-                                 >
-                                   <label className="form-label" htmlFor="paciente_id">
-                                     Paciente
-                                   </label>
-                                   <select
-                                     id="paciente_id"
-                                     className="form-input form-select"
-                                     {...register("paciente_id")}
-                                   >
-                                     <option value="">Ninguno / General</option>
-                                     {pacientes.map((p) => (
-                                       <option key={p.id} value={p.id}>
-                                         {p.nombre_completo}
-                                       </option>
-                                     ))}
-                                   </select>
-                                 </motion.div>
-                               )}
-                             </AnimatePresence>
+                              {/* Tipo */}
+                            <div className="form-group span-full">
+                              <label className="form-label">
+                                Tipo <span className="req">*</span>
+                              </label>
+                              <div className="relative flex bg-[var(--bg-subtle)] border border-[var(--border)] rounded-2xl p-1 gap-1">
+                                <label className="relative flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-xl text-xs font-extrabold cursor-pointer transition-colors z-10">
+                                  <input type="radio" value="ingreso" {...register("tipo")} style={{ display: "none" }} />
+                                  <ArrowUpCircle size={16} className={tipoSeleccionado === "ingreso" ? "text-[#10b981]" : "text-[var(--text-muted)]"} />
+                                  <span className={tipoSeleccionado === "ingreso" ? "text-[#10b981]" : "text-[var(--text-muted)]"}>Ingreso</span>
+                                  {tipoSeleccionado === "ingreso" && (
+                                    <motion.div
+                                      layoutId="activeTipo"
+                                      className="absolute inset-0 bg-[#10b981]/10 border border-[#10b981]/20 rounded-xl z-[-1]"
+                                      transition={{ type: "spring", stiffness: 380, damping: 30 }}
+                                    />
+                                  )}
+                                </label>
+                                <label className="relative flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-xl text-xs font-extrabold cursor-pointer transition-colors z-10">
+                                  <input type="radio" value="egreso" {...register("tipo")} style={{ display: "none" }} />
+                                  <ArrowDownCircle size={16} className={tipoSeleccionado === "egreso" ? "text-red-400" : "text-[var(--text-muted)]"} />
+                                  <span className={tipoSeleccionado === "egreso" ? "text-red-400" : "text-[var(--text-muted)]"}>Egreso</span>
+                                  {tipoSeleccionado === "egreso" && (
+                                    <motion.div
+                                      layoutId="activeTipo"
+                                      className="absolute inset-0 bg-red-400/10 border border-red-400/20 rounded-xl z-[-1]"
+                                      transition={{ type: "spring", stiffness: 380, damping: 30 }}
+                                    />
+                                  )}
+                                </label>
+                              </div>
+                            </div>
 
                             {/* Detalle */}
                             <div className="form-group span-full">
@@ -938,8 +938,8 @@ function TransaccionesContent() {
         }
 
         .icon-btn {
-          width: 28px;
-          height: 28px;
+          width: 43px;
+          height: 43px;
           border-radius: 6px;
           border: 1px solid var(--border);
           background: none;
@@ -951,6 +951,7 @@ function TransaccionesContent() {
           text-decoration: none;
           transition: all 120ms;
         }
+          
         .icon-btn:hover {
           background: var(--surface-hover);
           color: var(--text);

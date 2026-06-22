@@ -74,7 +74,7 @@ export function ChartBar({ data, title }: ChartBarProps) {
     <div className="chart-container glass-card">
       <h3 className="chart-title">{title}</h3>
       <div className="chart-wrap">
-        <ResponsiveContainer width="100%" height={240}>
+        <ResponsiveContainer width="100%" height={340}>
           <BarChart data={data} barGap={4} barCategoryGap="25%">
             <CartesianGrid
               strokeDasharray="3 3"

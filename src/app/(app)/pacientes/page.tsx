@@ -876,8 +876,8 @@ export default function PacientesPage() {
         }
 
         .icon-btn {
-          width: 28px;
-          height: 28px;
+          width: 43px;
+          height: 43px;
           border-radius: 6px;
           border: 1px solid var(--border);
           background: none;

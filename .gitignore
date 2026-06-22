@@ -49,3 +49,4 @@ package-lock.json
 .agents
 .atl
 scratch
+output_egresos.sql

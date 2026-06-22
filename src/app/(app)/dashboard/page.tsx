@@ -20,7 +20,12 @@ export default function DashboardPage() {
 
   // Transacciones del mes actual
   const now = new Date();
-  const mesActual = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  const año = now.getFullYear();
+  const mes = now.getMonth(); // 0-indexed
+  const mesActual = `${año}-${String(mes + 1).padStart(2, "0")}`;
+  const primerDia = `${mesActual}-01`;
+  const ultimoDiaFecha = new Date(año, mes + 1, 0);
+  const ultimoDia = `${mesActual}-${String(ultimoDiaFecha.getDate()).padStart(2, "0")}`;
 
   const { data: transaccionesMes = [], isLoading } = useQuery({
     queryKey: ["transacciones-mes", centroId, mesActual],
@@ -30,8 +35,8 @@ export default function DashboardPage() {
         .from("transacciones")
         .select("*")
         .eq("centro_id", centroId)
-        .gte("fecha", `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`)
-        .lte("fecha", `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-31`);
+        .gte("fecha", primerDia)
+        .lte("fecha", ultimoDia);
       return (data ?? []) as Transaccion[];
     },
     enabled: !!centroId,
