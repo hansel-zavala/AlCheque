@@ -14,7 +14,7 @@ import { transaccionSchema, type TransaccionFormData } from "@/types/forms";
 import { formatHNL } from "@/utils/currency";
 import { formatFechaCorta } from "@/utils/dates";
 import { FileUploader } from "@/components/transacciones/FileUploader";
-import type { TransaccionConRelaciones, ServicioCategoria, Paciente } from "@/types/database";
+import type { TransaccionConRelaciones, Servicio, Categoria, Paciente } from "@/types/database";
 
 function TransaccionesContent() {
   const { centroActivo } = useCentro();
@@ -27,22 +27,19 @@ function TransaccionesContent() {
 
   const [showNuevaCategoriaForm, setShowNuevaCategoriaForm] = useState(false);
   const [nuevaCatNombre, setNuevaCatNombre] = useState("");
-  const [nuevaCatCategoria, setNuevaCatCategoria] = useState("");
-  const [nuevaCatPrecio, setNuevaCatPrecio] = useState("");
 
   const createCategoriaRapidaMutation = useMutation({
     mutationFn: async () => {
       if (!centroId) throw new Error();
-      if (!nuevaCatNombre || !nuevaCatCategoria) throw new Error("Campos requeridos vacíos");
+      if (!nuevaCatNombre) throw new Error("Nombre requerido");
       
       const { data, error } = await supabase
-        .from("servicios_categorias")
+        .from("categorias")
         .insert({
           centro_id: centroId,
           nombre: nuevaCatNombre,
           tipo: tipoSeleccionado,
-          categoria: nuevaCatCategoria,
-          precio: nuevaCatPrecio ? parseFloat(nuevaCatPrecio) : null,
+          parent_id: null,
           activo: true,
         })
         .select()
@@ -53,15 +50,12 @@ function TransaccionesContent() {
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["categorias"] });
-      queryClient.invalidateQueries({ queryKey: ["servicios"] });
       
       if (data && data.id) {
-        setValue("servicio_categoria_id", data.id);
+        setValue("categoria_id", data.id);
       }
       
       setNuevaCatNombre("");
-      setNuevaCatCategoria("");
-      setNuevaCatPrecio("");
       setShowNuevaCategoriaForm(false);
     },
   });
@@ -91,7 +85,8 @@ function TransaccionesContent() {
   });
 
   const tipoSeleccionado = watch("tipo");
-  const categoriaSeleccionadaId = watch("servicio_categoria_id");
+  const servicioSeleccionadoId = watch("servicio_id");
+  const categoriaSeleccionadaId = watch("categoria_id");
 
   // Queries
   const { data: transacciones = [], isLoading } = useQuery({
@@ -100,7 +95,7 @@ function TransaccionesContent() {
       if (!centroId) return [];
       let q = supabase
         .from("transacciones")
-        .select("*, servicios_categorias(id,nombre,tipo,categoria), pacientes(id,nombre_completo), terapeutas(id,nombre_completo)")
+        .select("*, servicios(id,nombre,servicio,categoria_id), categorias(id,nombre,tipo,parent_id,parent:parent_id(id,nombre)), pacientes(id,nombre_completo), terapeutas(id,nombre_completo)")
         .eq("centro_id", centroId)
         .is("deleted_at", null)
         .order("fecha", { ascending: false })
@@ -118,13 +113,29 @@ function TransaccionesContent() {
     queryFn: async () => {
       if (!centroId) return [];
       const { data } = await supabase
-        .from("servicios_categorias")
+        .from("categorias")
+        .select("*, parent:parent_id(id, nombre)")
+        .eq("centro_id", centroId)
+        .eq("activo", true)
+        .is("deleted_at", null)
+        .order("nombre");
+      return (data ?? []) as any[];
+    },
+    enabled: !!centroId,
+  });
+
+  const { data: servicios = [] } = useQuery({
+    queryKey: ["servicios", centroId],
+    queryFn: async () => {
+      if (!centroId) return [];
+      const { data } = await supabase
+        .from("servicios")
         .select("*")
         .eq("centro_id", centroId)
         .eq("activo", true)
         .is("deleted_at", null)
         .order("nombre");
-      return (data ?? []) as ServicioCategoria[];
+      return (data ?? []) as Servicio[];
     },
     enabled: !!centroId,
   });
@@ -145,26 +156,41 @@ function TransaccionesContent() {
     enabled: !!centroId,
   });
 
-  // Autocompletar monto al seleccionar servicio/categoría
+  // Autocompletar monto y categoría al seleccionar servicio/plan
   useEffect(() => {
-    if (categoriaSeleccionadaId) {
-      const categoria = categorias.find((c) => c.id === categoriaSeleccionadaId);
-      if (categoria && categoria.precio !== null && categoria.precio !== undefined) {
-        setValue("monto", categoria.precio.toString(), { shouldValidate: true });
+    if (servicioSeleccionadoId) {
+      const servicio = servicios.find((s) => s.id === servicioSeleccionadoId);
+      if (servicio) {
+        if (servicio.precio !== null && servicio.precio !== undefined) {
+          setValue("monto", servicio.precio.toString(), { shouldValidate: true });
+        }
+        if (servicio.categoria_id) {
+          setValue("categoria_id", servicio.categoria_id, { shouldValidate: true });
+        }
       }
     }
-  }, [categoriaSeleccionadaId, categorias, setValue]);
+  }, [servicioSeleccionadoId, servicios, setValue]);
 
   const createMutation = useMutation({
     mutationFn: async (data: TransaccionFormData) => {
       if (!centroId) throw new Error("Sin centro activo");
+      
+      let catId = data.categoria_id || null;
+      if (data.tipo === "ingreso" && data.servicio_id) {
+        const sObj = servicios.find((s) => s.id === data.servicio_id);
+        if (sObj && sObj.categoria_id) {
+          catId = sObj.categoria_id;
+        }
+      }
+
       const { error } = await supabase.from("transacciones").insert({
         centro_id: centroId,
         tipo: data.tipo,
         monto: parseFloat(data.monto),
         metodo_pago: data.metodo_pago,
         fecha: data.fecha,
-        servicio_categoria_id: data.servicio_categoria_id || null,
+        servicio_id: data.servicio_id || null,
+        categoria_id: catId,
         paciente_id: data.paciente_id || null,
         terapeuta_id: data.terapeuta_id || null,
         detalle: data.detalle || null,
@@ -185,6 +211,15 @@ function TransaccionesContent() {
   const updateMutation = useMutation({
     mutationFn: async ({ id, data }: { id: string; data: TransaccionFormData }) => {
       if (!centroId) throw new Error("Sin centro activo");
+
+      let catId = data.categoria_id || null;
+      if (data.tipo === "ingreso" && data.servicio_id) {
+        const sObj = servicios.find((s) => s.id === data.servicio_id);
+        if (sObj && sObj.categoria_id) {
+          catId = sObj.categoria_id;
+        }
+      }
+
       const { error } = await supabase
         .from("transacciones")
         .update({
@@ -192,7 +227,8 @@ function TransaccionesContent() {
           monto: parseFloat(data.monto),
           metodo_pago: data.metodo_pago,
           fecha: data.fecha,
-          servicio_categoria_id: data.servicio_categoria_id || null,
+          servicio_id: data.servicio_id || null,
+          categoria_id: catId,
           paciente_id: data.paciente_id || null,
           terapeuta_id: data.terapeuta_id || null,
           detalle: data.detalle || null,
@@ -392,66 +428,95 @@ function TransaccionesContent() {
                               {errors.metodo_pago && <p className="form-error">{errors.metodo_pago.message}</p>}
                             </div>
 
-                            {/* Categoría */}
-                             <div className="form-group">
-                               <label className="form-label" htmlFor="servicio_categoria_id">
-                                 Categoría <span className="req">*</span>
-                               </label>
-                               <div className="flex gap-2">
-                                 <select
-                                   id="servicio_categoria_id"
-                                   className={`form-input form-select flex-1 ${errors.servicio_categoria_id ? "error" : ""}`}
-                                   {...register("servicio_categoria_id")}
+                            {/* Servicio (solo ingreso) */}
+                             <AnimatePresence>
+                               {tipoSeleccionado === "ingreso" && (
+                                 <motion.div
+                                   className="form-group"
+                                   initial={{ opacity: 0, y: -8 }}
+                                   animate={{ opacity: 1, y: 0 }}
+                                   exit={{ opacity: 0, y: -8 }}
+                                   transition={{ duration: 0.2 }}
                                  >
-                                   <option value="">Seleccionar...</option>
-                                   {categoriasFiltradas.map((c) => (
-                                     <option key={c.id} value={c.id}>
-                                       {c.nombre}
-                                     </option>
-                                   ))}
-                                 </select>
-                                 <button
-                                   type="button"
-                                   className="icon-btn btn-pressable flex items-center justify-center h-[38px] w-[38px] rounded-lg border border-[var(--border)] bg-white/5 hover:bg-white/10 text-[var(--text)] transition-colors flex-shrink-0"
-                                   onClick={() => setShowNuevaCategoriaForm(true)}
-                                   title="Nueva Categoría"
-                                 >
-                                   <Plus size={16} />
-                                 </button>
-                               </div>
-                               {errors.servicio_categoria_id && (
-                                 <p className="form-error">{errors.servicio_categoria_id.message}</p>
+                                   <label className="form-label" htmlFor="servicio_id">
+                                     Servicio / Plan
+                                   </label>
+                                   <select
+                                     id="servicio_id"
+                                     className="form-input form-select"
+                                     {...register("servicio_id")}
+                                   >
+                                     <option value="">General / Ninguno</option>
+                                     {servicios.map((s) => (
+                                       <option key={s.id} value={s.id}>
+                                         {s.nombre} {s.precio ? `(L ${s.precio.toFixed(2)})` : ""}
+                                       </option>
+                                     ))}
+                                   </select>
+                                 </motion.div>
                                )}
-                             </div>
+                             </AnimatePresence>
 
-                            {/* Paciente (solo ingreso) */}
-                            <AnimatePresence>
-                              {tipoSeleccionado === "ingreso" && (
-                                <motion.div
-                                  className="form-group"
-                                  initial={{ opacity: 0, y: -8 }}
-                                  animate={{ opacity: 1, y: 0 }}
-                                  exit={{ opacity: 0, y: -8 }}
-                                  transition={{ duration: 0.2 }}
-                                >
-                                  <label className="form-label" htmlFor="paciente_id">
-                                    Paciente
-                                  </label>
+                             {/* Categoría */}
+                              <div className="form-group">
+                                <label className="form-label" htmlFor="categoria_id">
+                                  Categoría <span className="req">*</span>
+                                </label>
+                                <div className="flex gap-2">
                                   <select
-                                    id="paciente_id"
-                                    className="form-input form-select"
-                                    {...register("paciente_id")}
+                                    id="categoria_id"
+                                    className={`form-input form-select flex-1 ${errors.categoria_id ? "error" : ""}`}
+                                    {...register("categoria_id")}
                                   >
-                                    <option value="">Ninguno / General</option>
-                                    {pacientes.map((p) => (
-                                      <option key={p.id} value={p.id}>
-                                        {p.nombre_completo}
+                                    <option value="">Seleccionar...</option>
+                                    {categoriasFiltradas.map((c) => (
+                                      <option key={c.id} value={c.id}>
+                                        {c.parent_id && c.parent ? `${c.parent.nombre} > ${c.nombre}` : c.nombre}
                                       </option>
                                     ))}
                                   </select>
-                                </motion.div>
-                              )}
-                            </AnimatePresence>
+                                  <button
+                                    type="button"
+                                    className="icon-btn btn-pressable flex items-center justify-center h-[38px] w-[38px] rounded-lg border border-[var(--border)] bg-white/5 hover:bg-white/10 text-[var(--text)] transition-colors flex-shrink-0"
+                                    onClick={() => setShowNuevaCategoriaForm(true)}
+                                    title="Nueva Categoría"
+                                  >
+                                    <Plus size={16} />
+                                  </button>
+                                </div>
+                                {errors.categoria_id && (
+                                  <p className="form-error">{errors.categoria_id.message}</p>
+                                )}
+                              </div>
+
+                             {/* Paciente (solo ingreso) */}
+                             <AnimatePresence>
+                               {tipoSeleccionado === "ingreso" && (
+                                 <motion.div
+                                   className="form-group"
+                                   initial={{ opacity: 0, y: -8 }}
+                                   animate={{ opacity: 1, y: 0 }}
+                                   exit={{ opacity: 0, y: -8 }}
+                                   transition={{ duration: 0.2 }}
+                                 >
+                                   <label className="form-label" htmlFor="paciente_id">
+                                     Paciente
+                                   </label>
+                                   <select
+                                     id="paciente_id"
+                                     className="form-input form-select"
+                                     {...register("paciente_id")}
+                                   >
+                                     <option value="">Ninguno / General</option>
+                                     {pacientes.map((p) => (
+                                       <option key={p.id} value={p.id}>
+                                         {p.nombre_completo}
+                                       </option>
+                                     ))}
+                                   </select>
+                                 </motion.div>
+                               )}
+                             </AnimatePresence>
 
                             {/* Detalle */}
                             <div className="form-group span-full">
@@ -517,7 +582,7 @@ function TransaccionesContent() {
       </Dialog.Root>
 
       {/* Sub-modal de Rápida Categoría */}
-      <Dialog.Root open={showNuevaCategoriaForm} onOpenChange={(open) => { if (!open) { setNuevaCatNombre(""); setNuevaCatCategoria(""); setNuevaCatPrecio(""); } setShowNuevaCategoriaForm(open); }}>
+      <Dialog.Root open={showNuevaCategoriaForm} onOpenChange={(open) => { if (!open) { setNuevaCatNombre(""); } setShowNuevaCategoriaForm(open); }}>
         <Dialog.Portal>
           <AnimatePresence>
             {showNuevaCategoriaForm && (
@@ -547,7 +612,7 @@ function TransaccionesContent() {
                               Crear Nueva Categoría ({tipoSeleccionado === "ingreso" ? "Ingreso" : "Egreso"})
                             </Dialog.Title>
                             <Dialog.Description className="sr-only">
-                              Formulario para agregar una nueva categoría de servicio de manera rápida.
+                              Formulario para agregar una nueva categoría de manera rápida.
                             </Dialog.Description>
                           </div>
                           <Dialog.Close asChild>
@@ -568,34 +633,10 @@ function TransaccionesContent() {
                                 id="quick-cat-nombre"
                                 type="text"
                                 className="form-input text-xs py-1.5 px-3 rounded-lg"
-                                placeholder="Ej. Terapia Física"
+                                placeholder="Ej. Suscripciones, Nómina"
                                 required
                                 value={nuevaCatNombre}
                                 onChange={(e) => setNuevaCatNombre(e.target.value)}
-                              />
-                            </div>
-                            <div className="form-group">
-                              <label className="form-label text-xs font-bold" htmlFor="quick-cat-categoria">Categoría <span className="req">*</span></label>
-                              <input
-                                id="quick-cat-categoria"
-                                type="text"
-                                className="form-input text-xs py-1.5 px-3 rounded-lg"
-                                placeholder="Ej. Sesiones"
-                                required
-                                value={nuevaCatCategoria}
-                                onChange={(e) => setNuevaCatCategoria(e.target.value)}
-                              />
-                            </div>
-                            <div className="form-group">
-                              <label className="form-label text-xs font-bold" htmlFor="quick-cat-precio">Precio base (L)</label>
-                              <input
-                                id="quick-cat-precio"
-                                type="text"
-                                inputMode="decimal"
-                                className="form-input text-xs py-1.5 px-3 rounded-lg"
-                                placeholder="0.00"
-                                value={nuevaCatPrecio}
-                                onChange={(e) => setNuevaCatPrecio(e.target.value)}
                               />
                             </div>
                           </div>
@@ -713,7 +754,12 @@ function TransaccionesContent() {
                       </td>
                       <td>
                         <span className="text-sm font-medium">
-                          {(t as any).servicios_categorias?.nombre ?? "—"}
+                          {t.servicios?.nombre 
+                            ? `${t.servicios.nombre} (Plan)` 
+                            : t.categorias?.parent 
+                              ? `${t.categorias.parent.nombre} > ${t.categorias.nombre}` 
+                              : t.categorias?.nombre ?? "—"
+                          }
                         </span>
                       </td>
                       <td>
@@ -757,7 +803,8 @@ function TransaccionesContent() {
                                 monto: t.monto.toString(),
                                 fecha: t.fecha,
                                 metodo_pago: t.metodo_pago,
-                                servicio_categoria_id: t.servicio_categoria_id || "",
+                                servicio_id: t.servicio_id || "",
+                                categoria_id: t.categoria_id || "",
                                 paciente_id: t.paciente_id || "",
                                 terapeuta_id: t.terapeuta_id || "",
                                 detalle: t.detalle || "",

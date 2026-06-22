@@ -4,22 +4,23 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Building2, Plus, Trash2, Users, Tag, Sun, Moon, Monitor, Check, ShieldAlert, Calendar, Pencil } from "lucide-react";
+import { Building2, Plus, Trash2, Users, Tag, Folder, Sun, Moon, Monitor, Check, ShieldAlert, Calendar, Pencil } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { createClient } from "@/lib/supabase/client";
 import { useCentro } from "@/context/CentroContext";
 import { useTheme } from "@/context/ThemeContext";
 import {
-  centroSchema, servicioCategoriaSchema, terapeutaSchema,
-  type CentroFormData, type ServicioCategoriaFormData, type TerapeutaFormData
+  centroSchema, servicioSchema, categoriaSchema, terapeutaSchema,
+  type CentroFormData, type ServicioFormData, type CategoriaFormData, type TerapeutaFormData
 } from "@/types/forms";
-import type { ServicioCategoria, Terapeuta } from "@/types/database";
+import type { Servicio, Categoria, Terapeuta } from "@/types/database";
 
-type Tab = "centro" | "servicios" | "terapeutas" | "apariencia";
+type Tab = "centro" | "servicios" | "categorias" | "terapeutas" | "apariencia";
 
 const TABS: { id: Tab; label: string; icon: any }[] = [
   { id: "centro", label: "Datos del centro", icon: Building2 },
   { id: "servicios", label: "Servicios y planes", icon: Tag },
+  { id: "categorias", label: "Categorías", icon: Folder },
   { id: "terapeutas", label: "Terapeutas", icon: Users },
   { id: "apariencia", label: "Apariencia", icon: Monitor },
 ];
@@ -85,30 +86,29 @@ export default function ConfiguracionPage() {
     queryFn: async () => {
       if (!centroId) return [];
       const { data } = await supabase
-        .from("servicios_categorias")
-        .select("*")
+        .from("servicios")
+        .select("*, categorias(id, nombre)")
         .eq("centro_id", centroId)
         .is("deleted_at", null)
-        .order("tipo")
         .order("nombre");
-      return (data ?? []) as ServicioCategoria[];
+      return (data ?? []) as any[];
     },
     enabled: !!centroId,
   });
 
-  const servicioForm = useForm<ServicioCategoriaFormData>({
-    resolver: zodResolver(servicioCategoriaSchema),
-    defaultValues: { tipo: "ingreso", activo: true },
+  const servicioForm = useForm<ServicioFormData>({
+    resolver: zodResolver(servicioSchema),
+    defaultValues: { nombre: "", servicio: "", categoria_id: "", precio: "", activo: true },
   });
 
   const createServicioMutation = useMutation({
-    mutationFn: async (data: ServicioCategoriaFormData) => {
+    mutationFn: async (data: ServicioFormData) => {
       if (!centroId) throw new Error();
-      const { error } = await supabase.from("servicios_categorias").insert({
+      const { error } = await supabase.from("servicios").insert({
         centro_id: centroId,
         nombre: data.nombre,
-        tipo: data.tipo,
-        categoria: data.categoria,
+        servicio: data.servicio,
+        categoria_id: data.categoria_id,
         precio: data.precio ? parseFloat(data.precio) : null,
         activo: data.activo,
       });
@@ -116,30 +116,28 @@ export default function ConfiguracionPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["servicios"] });
-      queryClient.invalidateQueries({ queryKey: ["categorias"] });
       servicioForm.reset();
       setShowServicioForm(false);
     },
   });
 
   const updateServicioMutation = useMutation({
-    mutationFn: async ({ id, data }: { id: string; data: ServicioCategoriaFormData }) => {
+    mutationFn: async ({ id, data }: { id: string; data: ServicioFormData }) => {
       if (!centroId) throw new Error();
       const { error } = await supabase
-        .from("servicios_categorias")
+        .from("servicios")
         .update({
           nombre: data.nombre,
-          tipo: data.tipo,
-          categoria: data.categoria,
+          servicio: data.servicio,
+          categoria_id: data.categoria_id,
           precio: data.precio ? parseFloat(data.precio) : null,
           activo: data.activo,
         })
-        .eq("id", id);
+          .eq("id", id);
       if (error) throw error;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["servicios"] });
-      queryClient.invalidateQueries({ queryKey: ["categorias"] });
       servicioForm.reset();
       setEditingServicioId(null);
       setShowServicioForm(false);
@@ -149,11 +147,92 @@ export default function ConfiguracionPage() {
   const deleteServicioMutation = useMutation({
     mutationFn: async (id: string) => {
       await supabase
-        .from("servicios_categorias")
+        .from("servicios")
         .update({ deleted_at: new Date().toISOString() })
         .eq("id", id);
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["servicios"] }),
+  });
+
+  // ── Categorías ────────────────────────────────────────────────
+  const { data: categorias = [] } = useQuery({
+    queryKey: ["categorias", centroId],
+    queryFn: async () => {
+      if (!centroId) return [];
+      const { data } = await supabase
+        .from("categorias")
+        .select("*, parent:parent_id(id, nombre)")
+        .eq("centro_id", centroId)
+        .is("deleted_at", null)
+        .order("tipo")
+        .order("nombre");
+      return (data ?? []) as any[];
+    },
+    enabled: !!centroId,
+  });
+
+  const [showCategoriaForm, setShowCategoriaForm] = useState(false);
+  const [editingCategoriaId, setEditingCategoriaId] = useState<string | null>(null);
+
+  const categoriaForm = useForm<CategoriaFormData>({
+    resolver: zodResolver(categoriaSchema),
+    defaultValues: { nombre: "", tipo: "egreso", parent_id: "", activo: true },
+  });
+
+  const watchTipo = categoriaForm.watch("tipo") || "egreso";
+
+  const createCategoriaMutation = useMutation({
+    mutationFn: async (data: CategoriaFormData) => {
+      if (!centroId) throw new Error();
+      const { error } = await supabase.from("categorias").insert({
+        centro_id: centroId,
+        nombre: data.nombre,
+        tipo: data.tipo,
+        parent_id: data.parent_id || null,
+        activo: data.activo,
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["categorias"] });
+      categoriaForm.reset();
+      setShowCategoriaForm(false);
+    },
+  });
+
+  const updateCategoriaMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: CategoriaFormData }) => {
+      if (!centroId) throw new Error();
+      const { error } = await supabase
+        .from("categorias")
+        .update({
+          nombre: data.nombre,
+          tipo: data.tipo,
+          parent_id: data.parent_id || null,
+          activo: data.activo,
+        })
+        .eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["categorias"] });
+      categoriaForm.reset();
+      setEditingCategoriaId(null);
+      setShowCategoriaForm(false);
+    },
+  });
+
+  const deleteCategoriaMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase
+        .from("categorias")
+        .update({ deleted_at: new Date().toISOString() })
+        .eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["categorias"] });
+    },
   });
 
   // ── Terapeutas ────────────────────────────────────────────────
@@ -469,20 +548,24 @@ export default function ConfiguracionPage() {
                 })} noValidate>
                   <div className="form-grid">
                     <div className="form-group">
-                      <label className="form-label" htmlFor="srv-nombre">Nombre <span className="req">*</span></label>
-                      <input id="srv-nombre" type="text" className={`form-input ${servicioForm.formState.errors.nombre ? "error" : ""}`} {...servicioForm.register("nombre")} />
+                      <label className="form-label" htmlFor="srv-nombre">Nombre del Plan/Servicio <span className="req">*</span></label>
+                      <input id="srv-nombre" type="text" className={`form-input ${servicioForm.formState.errors.nombre ? "error" : ""}`} placeholder="Ej. Plan Básico" {...servicioForm.register("nombre")} />
                       {servicioForm.formState.errors.nombre && <p className="form-error">{servicioForm.formState.errors.nombre.message}</p>}
                     </div>
                     <div className="form-group">
-                      <label className="form-label" htmlFor="srv-tipo">Tipo <span className="req">*</span></label>
-                      <select id="srv-tipo" className="form-input form-select" {...servicioForm.register("tipo")}>
-                        <option value="ingreso">Ingreso</option>
-                        <option value="egreso">Egreso</option>
-                      </select>
+                      <label className="form-label" htmlFor="srv-servicio">Clasificación <span className="req">*</span></label>
+                      <input id="srv-servicio" type="text" className={`form-input ${servicioForm.formState.errors.servicio ? "error" : ""}`} placeholder="Ej. Sesiones, Mensualidades..." {...servicioForm.register("servicio")} />
+                      {servicioForm.formState.errors.servicio && <p className="form-error">{servicioForm.formState.errors.servicio.message}</p>}
                     </div>
                     <div className="form-group">
-                      <label className="form-label" htmlFor="srv-cat">Categoría <span className="req">*</span></label>
-                      <input id="srv-cat" type="text" className={`form-input ${servicioForm.formState.errors.categoria ? "error" : ""}`} placeholder="Mensualidades, Nómina..." {...servicioForm.register("categoria")} />
+                      <label className="form-label" htmlFor="srv-cat-id">Categoría Financiera (Ingreso) <span className="req">*</span></label>
+                      <select id="srv-cat-id" className={`form-input form-select ${servicioForm.formState.errors.categoria_id ? "error" : ""}`} {...servicioForm.register("categoria_id")}>
+                        <option value="">Seleccionar...</option>
+                        {categorias.filter(c => c.tipo === "ingreso").map(c => (
+                          <option key={c.id} value={c.id}>{c.nombre}</option>
+                        ))}
+                      </select>
+                      {servicioForm.formState.errors.categoria_id && <p className="form-error">{servicioForm.formState.errors.categoria_id.message}</p>}
                     </div>
                     <div className="form-group">
                       <label className="form-label" htmlFor="srv-precio">Precio base (L)</label>
@@ -523,12 +606,11 @@ export default function ConfiguracionPage() {
                 <div key={s.id} className="item-row flex items-center justify-between p-3 border border-[var(--border)] rounded-xl bg-[var(--bg-subtle)] hover:bg-[var(--surface-hover)] transition-all">
                   <div className="item-info">
                     <span className="item-name text-sm font-semibold text-[var(--text)]">{s.nombre}</span>
-                    <span className="item-meta text-xs text-[var(--text-muted)] block mt-0.5">{s.categoria}</span>
+                    <span className="item-meta text-xs text-[var(--text-muted)] block mt-0.5">
+                      {s.servicio} {s.categorias ? `• Categoría: ${s.categorias.nombre}` : ""}
+                    </span>
                   </div>
                   <div className="item-right flex items-center gap-3">
-                    <span className={`badge ${s.tipo === "ingreso" ? "badge-green" : "badge-red"}`}>
-                      {s.tipo}
-                    </span>
                     {s.precio && (
                       <span className="item-price text-sm font-bold font-mono text-[var(--accent)]">L {s.precio.toFixed(2)}</span>
                     )}
@@ -538,8 +620,8 @@ export default function ConfiguracionPage() {
                         setEditingServicioId(s.id);
                         servicioForm.reset({
                           nombre: s.nombre,
-                          tipo: s.tipo,
-                          categoria: s.categoria,
+                          servicio: s.servicio,
+                          categoria_id: s.categoria_id || "",
                           precio: s.precio ? s.precio.toString() : "",
                           activo: s.activo,
                         });
@@ -555,6 +637,140 @@ export default function ConfiguracionPage() {
                         if (confirm("¿Eliminar este servicio?")) deleteServicioMutation.mutate(s.id);
                       }}
                       aria-label="Eliminar servicio"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </motion.div>
+      )}
+
+      {/* Panel: Categorías */}
+      {activeTab === "categorias" && (
+        <motion.div
+          className="config-card glass-card p-6"
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3, ease: [0.23, 1, 0.32, 1] }}
+        >
+          <div className="config-card-head flex items-center justify-between mb-5">
+            <h2 className="config-card-title text-base font-extrabold tracking-tight m-0">Categorías de Ingreso y Egreso</h2>
+            <button
+              className="btn-primary btn-pressable flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider"
+              onClick={() => {
+                if (showCategoriaForm) {
+                  categoriaForm.reset();
+                  setEditingCategoriaId(null);
+                }
+                setShowCategoriaForm(!showCategoriaForm);
+              }}
+            >
+              <Plus size={14} />
+              <span>{showCategoriaForm ? "Cancelar" : "Agregar"}</span>
+            </button>
+          </div>
+
+          <AnimatePresence>
+            {showCategoriaForm && (
+              <motion.div
+                className="inline-form border border-[var(--border)] rounded-xl p-4 bg-[var(--bg-subtle)] mb-5"
+                initial={{ opacity: 0, height: 0, overflow: "hidden" }}
+                animate={{ opacity: 1, height: "auto", overflow: "visible" }}
+                exit={{ opacity: 0, height: 0, overflow: "hidden" }}
+                transition={{ duration: 0.25 }}
+              >
+                <form onSubmit={categoriaForm.handleSubmit((d) => {
+                  if (editingCategoriaId) {
+                    updateCategoriaMutation.mutate({ id: editingCategoriaId, data: d });
+                  } else {
+                    createCategoriaMutation.mutate(d);
+                  }
+                })} noValidate>
+                  <div className="form-grid">
+                    <div className="form-group">
+                      <label className="form-label" htmlFor="cat-nombre">Nombre de la Categoría <span className="req">*</span></label>
+                      <input id="cat-nombre" type="text" className={`form-input ${categoriaForm.formState.errors.nombre ? "error" : ""}`} placeholder="Ej. Suscripciones, Nómina" {...categoriaForm.register("nombre")} />
+                      {categoriaForm.formState.errors.nombre && <p className="form-error">{categoriaForm.formState.errors.nombre.message}</p>}
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label" htmlFor="cat-tipo">Tipo <span className="req">*</span></label>
+                      <select id="cat-tipo" className="form-input form-select" {...categoriaForm.register("tipo")}>
+                        <option value="egreso">Egreso (Gasto)</option>
+                        <option value="ingreso">Ingreso</option>
+                      </select>
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label" htmlFor="cat-parent">Categoría Padre (Opcional)</label>
+                      <select id="cat-parent" className="form-input form-select" {...categoriaForm.register("parent_id")}>
+                        <option value="">Ninguna (Categoría Principal)</option>
+                        {categorias
+                          .filter((c) => c.tipo === watchTipo && !c.parent_id && c.id !== editingCategoriaId)
+                          .map((c) => (
+                            <option key={c.id} value={c.id}>{c.nombre}</option>
+                          ))
+                        }
+                      </select>
+                    </div>
+                  </div>
+                  <div className="form-actions mt-4">
+                    <button type="submit" className="btn-primary btn-pressable px-4 py-2 text-sm font-semibold rounded-lg" disabled={createCategoriaMutation.isPending || updateCategoriaMutation.isPending}>
+                      {createCategoriaMutation.isPending || updateCategoriaMutation.isPending ? (
+                        <span className="btn-spinner" />
+                      ) : editingCategoriaId ? (
+                        "Actualizar"
+                      ) : (
+                        "Guardar"
+                      )}
+                    </button>
+                  </div>
+                </form>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          <div className="items-list flex flex-col gap-2">
+            {categorias.length === 0 ? (
+              <p className="items-empty text-center p-8 text-sm text-[var(--text-subtle)] font-medium">No hay categorías configuradas</p>
+            ) : (
+              categorias.map((c) => (
+                <div key={c.id} className="item-row flex items-center justify-between p-3 border border-[var(--border)] rounded-xl bg-[var(--bg-subtle)] hover:bg-[var(--surface-hover)] transition-all">
+                  <div className="item-info">
+                    <span className="item-name text-sm font-semibold text-[var(--text)]">{c.nombre}</span>
+                    {c.parent && (
+                      <span className="item-meta text-xs text-[var(--text-muted)] block mt-0.5">
+                        Subcategoría de: <strong className="text-[var(--text)]">{c.parent.nombre}</strong>
+                      </span>
+                    )}
+                  </div>
+                  <div className="item-right flex items-center gap-3">
+                    <span className={`badge ${c.tipo === "ingreso" ? "badge-green" : "badge-red"}`}>
+                      {c.tipo === "ingreso" ? "Ingreso" : "Egreso"}
+                    </span>
+                    <button
+                      className="icon-btn btn-pressable"
+                      onClick={() => {
+                        setEditingCategoriaId(c.id);
+                        categoriaForm.reset({
+                          nombre: c.nombre,
+                          tipo: c.tipo,
+                          parent_id: c.parent_id || "",
+                          activo: c.activo,
+                        });
+                        setShowCategoriaForm(true);
+                      }}
+                      aria-label="Editar categoría"
+                    >
+                      <Pencil size={14} />
+                    </button>
+                    <button
+                      className="icon-btn danger btn-pressable"
+                      onClick={() => {
+                        if (confirm("¿Eliminar esta categoría?")) deleteCategoriaMutation.mutate(c.id);
+                      }}
+                      aria-label="Eliminar categoría"
                     >
                       <Trash2 size={14} />
                     </button>

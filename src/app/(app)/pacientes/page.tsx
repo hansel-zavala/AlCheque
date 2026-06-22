@@ -13,7 +13,7 @@ import { createClient } from "@/lib/supabase/client";
 import { useCentro } from "@/context/CentroContext";
 import { pacienteSchema, type PacienteFormData } from "@/types/forms";
 import { formatFechaCorta } from "@/utils/dates";
-import type { PacienteConPlan, ServicioCategoria } from "@/types/database";
+import type { PacienteConPlan, Servicio } from "@/types/database";
 import { KpiCard } from "@/components/dashboard/KpiCard";
 
 const ESTADO_LABEL: Record<string, string> = {
@@ -61,13 +61,42 @@ export default function PacientesPage() {
       if (!centroId) throw new Error();
       if (!nuevoPlanNombre || !nuevoPlanCategoria) throw new Error("Campos requeridos vacíos");
       
+      // 1. Buscar o crear la categoría
+      let catId: string;
+      const { data: existingCat } = await supabase
+        .from("categorias")
+        .select("id")
+        .eq("centro_id", centroId)
+        .eq("nombre", nuevoPlanCategoria)
+        .eq("tipo", "ingreso")
+        .is("deleted_at", null)
+        .maybeSingle();
+
+      if (existingCat) {
+        catId = existingCat.id;
+      } else {
+        const { data: newCat, error: catError } = await supabase
+          .from("categorias")
+          .insert({
+            centro_id: centroId,
+            nombre: nuevoPlanCategoria,
+            tipo: "ingreso",
+            activo: true,
+          })
+          .select()
+          .single();
+        if (catError) throw catError;
+        catId = newCat.id;
+      }
+
+      // 2. Insertar el servicio
       const { data, error } = await supabase
-        .from("servicios_categorias")
+        .from("servicios")
         .insert({
           centro_id: centroId,
           nombre: nuevoPlanNombre,
-          tipo: "ingreso",
-          categoria: nuevoPlanCategoria,
+          servicio: "Plan",
+          categoria_id: catId,
           precio: nuevoPlanPrecio ? parseFloat(nuevoPlanPrecio) : null,
           activo: true,
         })
@@ -98,7 +127,7 @@ export default function PacientesPage() {
       if (!centroId) return [];
       let q = supabase
         .from("pacientes")
-        .select("*, servicios_categorias(id, nombre, precio)")
+        .select("*, servicios(id, nombre, precio)")
         .eq("centro_id", centroId)
         .is("deleted_at", null)
         .order("nombre_completo");
@@ -117,14 +146,13 @@ export default function PacientesPage() {
     queryFn: async () => {
       if (!centroId) return [];
       const { data } = await supabase
-        .from("servicios_categorias")
+        .from("servicios")
         .select("*")
         .eq("centro_id", centroId)
-        .eq("tipo", "ingreso")
         .eq("activo", true)
         .is("deleted_at", null)
         .order("nombre");
-      return (data ?? []) as ServicioCategoria[];
+      return (data ?? []) as Servicio[];
     },
     enabled: !!centroId,
   });

@@ -43,7 +43,7 @@ export default function DashboardPage() {
       if (!centroId) return [];
       const { data } = await supabase
         .from("pacientes")
-        .select("*, servicios_categorias(id, nombre, precio)")
+        .select("*, servicios(id, nombre, precio)")
         .eq("centro_id", centroId)
         .eq("estado_mensualidad", true)
         .eq("estado_suscripcion", "activo")
@@ -267,7 +267,7 @@ export default function DashboardPage() {
                     </td>
                     <td>
                       <span className="plan-text">
-                        {(p as any).servicios_categorias?.nombre ?? "—"}
+                        {(p as any).servicios?.nombre ?? "—"}
                       </span>
                     </td>
                     <td>

@@ -46,14 +46,13 @@ export interface Database {
           updated_at?: string;
         };
       };
-      servicios_categorias: {
+      categorias: {
         Row: {
           id: string;
           centro_id: string;
           nombre: string;
           tipo: "ingreso" | "egreso";
-          categoria: string;
-          precio: number | null;
+          parent_id: string | null;
           activo: boolean;
           created_at: string;
           deleted_at: string | null;
@@ -63,8 +62,7 @@ export interface Database {
           centro_id: string;
           nombre: string;
           tipo: "ingreso" | "egreso";
-          categoria: string;
-          precio?: number | null;
+          parent_id?: string | null;
           activo?: boolean;
           created_at?: string;
           deleted_at?: string | null;
@@ -72,7 +70,38 @@ export interface Database {
         Update: {
           nombre?: string;
           tipo?: "ingreso" | "egreso";
-          categoria?: string;
+          parent_id?: string | null;
+          activo?: boolean;
+          deleted_at?: string | null;
+        };
+      };
+      servicios: {
+        Row: {
+          id: string;
+          centro_id: string;
+          nombre: string;
+          servicio: string;
+          categoria_id: string | null;
+          precio: number | null;
+          activo: boolean;
+          created_at: string;
+          deleted_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          centro_id: string;
+          nombre: string;
+          servicio: string;
+          categoria_id?: string | null;
+          precio?: number | null;
+          activo?: boolean;
+          created_at?: string;
+          deleted_at?: string | null;
+        };
+        Update: {
+          nombre?: string;
+          servicio?: string;
+          categoria_id?: string | null;
           precio?: number | null;
           activo?: boolean;
           deleted_at?: string | null;
@@ -166,7 +195,8 @@ export interface Database {
           detalle: string | null;
           fecha: string;
           comprobante_url: string | null;
-          servicio_categoria_id: string | null;
+          servicio_id: string | null;
+          categoria_id: string | null;
           paciente_id: string | null;
           terapeuta_id: string | null;
           created_at: string;
@@ -181,7 +211,8 @@ export interface Database {
           detalle?: string | null;
           fecha?: string;
           comprobante_url?: string | null;
-          servicio_categoria_id?: string | null;
+          servicio_id?: string | null;
+          categoria_id?: string | null;
           paciente_id?: string | null;
           terapeuta_id?: string | null;
           created_at?: string;
@@ -194,7 +225,8 @@ export interface Database {
           detalle?: string | null;
           fecha?: string;
           comprobante_url?: string | null;
-          servicio_categoria_id?: string | null;
+          servicio_id?: string | null;
+          categoria_id?: string | null;
           paciente_id?: string | null;
           terapeuta_id?: string | null;
           deleted_at?: string | null;
@@ -209,18 +241,22 @@ export interface Database {
 
 // Tipos derivados para uso en la app
 export type Centro = Database["public"]["Tables"]["centros"]["Row"];
-export type ServicioCategoria = Database["public"]["Tables"]["servicios_categorias"]["Row"];
+export type Categoria = Database["public"]["Tables"]["categorias"]["Row"];
+export type Servicio = Database["public"]["Tables"]["servicios"]["Row"];
 export type Terapeuta = Database["public"]["Tables"]["terapeutas"]["Row"];
 export type Paciente = Database["public"]["Tables"]["pacientes"]["Row"];
 export type Transaccion = Database["public"]["Tables"]["transacciones"]["Row"];
 
 // Tipos con joins
 export type TransaccionConRelaciones = Transaccion & {
-  servicios_categorias?: Pick<ServicioCategoria, "id" | "nombre" | "tipo" | "categoria"> | null;
+  servicios?: Pick<Servicio, "id" | "nombre" | "servicio" | "categoria_id"> | null;
+  categorias?: (Pick<Categoria, "id" | "nombre" | "tipo" | "parent_id"> & {
+    parent?: Pick<Categoria, "id" | "nombre"> | null;
+  }) | null;
   pacientes?: Pick<Paciente, "id" | "nombre_completo"> | null;
   terapeutas?: Pick<Terapeuta, "id" | "nombre_completo"> | null;
 };
 
 export type PacienteConPlan = Paciente & {
-  servicios_categorias?: Pick<ServicioCategoria, "id" | "nombre" | "precio"> | null;
+  servicios?: Pick<Servicio, "id" | "nombre" | "precio"> | null;
 };

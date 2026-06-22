@@ -31,7 +31,7 @@ export default function ReportesPage() {
       if (!centroId) return [];
       const { data } = await supabase
         .from("transacciones")
-        .select("*, servicios_categorias(id, nombre, tipo, categoria), pacientes(id, nombre_completo)")
+        .select("*, servicios(id, nombre), categorias(id, nombre, tipo), pacientes(id, nombre_completo)")
         .eq("centro_id", centroId)
         .gte("fecha", fechaInicio)
         .lte("fecha", fechaFin)
@@ -69,7 +69,7 @@ export default function ReportesPage() {
   // Desglose por categoría (egresos)
   const categoriaEgresosMap: Record<string, number> = {};
   egresos.forEach((t) => {
-    const cat = (t as any).servicios_categorias?.categoria ?? "Otros";
+    const cat = t.categorias?.nombre ?? "Otros";
     categoriaEgresosMap[cat] = (categoriaEgresosMap[cat] ?? 0) + t.monto;
   });
 
@@ -91,7 +91,7 @@ export default function ReportesPage() {
     const rows = transacciones.map((t) => [
       formatFechaCorta(t.fecha),
       t.tipo,
-      (t as any).servicios_categorias?.nombre ?? "",
+      t.servicios?.nombre ?? t.categorias?.nombre ?? "",
       t.detalle ?? "",
       t.metodo_pago,
       (t as any).pacientes?.nombre_completo ?? "",
@@ -131,7 +131,7 @@ export default function ReportesPage() {
       body: transacciones.map((t) => [
         formatFechaCorta(t.fecha),
         t.tipo,
-        (t as any).servicios_categorias?.nombre ?? "",
+        t.servicios?.nombre ?? t.categorias?.nombre ?? "",
         t.detalle ?? "",
         t.metodo_pago,
         `L ${t.monto.toFixed(2)}`,
@@ -305,7 +305,7 @@ export default function ReportesPage() {
                         {t.tipo === "ingreso" ? "↑ Ingreso" : "↓ Egreso"}
                       </span>
                     </td>
-                    <td><span className="text-sm font-medium">{(t as any).servicios_categorias?.nombre ?? "—"}</span></td>
+                    <td><span className="text-sm font-medium">{t.servicios?.nombre ?? t.categorias?.nombre ?? "—"}</span></td>
                     <td><span className="text-sm text-[var(--text-muted)]">{t.detalle ?? "—"}</span></td>
                     <td><span className="badge badge-muted capitalize">{t.metodo_pago}</span></td>
                     <td><span className="text-sm font-medium">{(t as any).pacientes?.nombre_completo ?? "—"}</span></td>

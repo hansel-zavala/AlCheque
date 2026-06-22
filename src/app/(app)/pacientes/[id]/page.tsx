@@ -31,11 +31,11 @@ export default function PacienteDetailPage({ params }: { params: Promise<{ id: s
     queryFn: async () => {
       const { data } = await supabase
         .from("pacientes")
-        .select("*, servicios_categorias(id, nombre, precio)")
+        .select("*, servicios(id, nombre, precio)")
         .eq("id", id)
         .is("deleted_at", null)
         .single();
-      return data as unknown as Paciente & { servicios_categorias?: { nombre: string; precio: number | null } | null };
+      return data as unknown as Paciente & { servicios?: { nombre: string; precio: number | null } | null };
     },
   });
 
@@ -44,7 +44,7 @@ export default function PacienteDetailPage({ params }: { params: Promise<{ id: s
     queryFn: async () => {
       const { data } = await supabase
         .from("transacciones")
-        .select("*, servicios_categorias(id, nombre, categoria)")
+        .select("*, servicios(id, nombre), categorias(id, nombre)")
         .eq("paciente_id", id)
         .is("deleted_at", null)
         .order("fecha", { ascending: false })
@@ -126,13 +126,13 @@ export default function PacienteDetailPage({ params }: { params: Promise<{ id: s
             </div>
           </div>
 
-          {(paciente as any).servicios_categorias && (
+          {(paciente as any).servicios && (
             <div className="ic-plan mt-4 pt-4 border-t border-[var(--border)]">
               <span className="ic-plan-label block text-[10px] font-mono font-bold text-[var(--text-subtle)] uppercase tracking-wider">Plan activo</span>
-              <span className="ic-plan-name block text-sm font-bold text-[var(--text)] mt-1">{(paciente as any).servicios_categorias.nombre}</span>
-              {(paciente as any).servicios_categorias.precio && (
+              <span className="ic-plan-name block text-sm font-bold text-[var(--text)] mt-1">{(paciente as any).servicios.nombre}</span>
+              {(paciente as any).servicios.precio && (
                 <span className="ic-plan-price block text-xs font-mono font-bold text-[var(--accent)] mt-0.5">
-                  {formatHNL((paciente as any).servicios_categorias.precio)}/mes
+                  {formatHNL((paciente as any).servicios.precio)}/mes
                 </span>
               )}
             </div>
@@ -192,7 +192,7 @@ export default function PacienteDetailPage({ params }: { params: Promise<{ id: s
                   <div className="tl-content">
                     <div className="tl-top">
                       <span className="tl-categoria">
-                        {(pago as any).servicios_categorias?.nombre ?? "Pago"}
+                        {(pago as any).servicios?.nombre ?? (pago as any).categorias?.nombre ?? "Pago"}
                       </span>
                       <span className="tl-monto">
                         {formatHNL(pago.monto)}
