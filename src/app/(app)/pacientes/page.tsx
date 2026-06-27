@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Plus, Search, UserCheck, Trash2, Filter, Users, ShieldAlert, CircleUserRound, ToggleLeft, ToggleRight, X, Pencil } from "lucide-react";
+import { Plus, Search, UserCheck, Trash2, Filter, CircleUserRound, ToggleLeft, ToggleRight, X, Pencil } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
@@ -12,7 +12,7 @@ import * as Dialog from "@radix-ui/react-dialog";
 import { createClient } from "@/lib/supabase/client";
 import { useCentro } from "@/context/CentroContext";
 import { pacienteSchema, type PacienteFormData } from "@/types/forms";
-import { formatFechaCorta } from "@/utils/dates";
+import { formatFechaCorta, formatFechaInput } from "@/utils/dates";
 import type { PacienteConPlan, Servicio } from "@/types/database";
 import { KpiCard } from "@/components/dashboard/KpiCard";
 
@@ -28,6 +28,10 @@ const ESTADO_BADGE: Record<string, string> = {
   cancelado: "badge-muted",
 };
 
+function toDateInputValue(date: string) {
+  return date.split("T")[0] ?? date;
+}
+
 export default function PacientesPage() {
   const router = useRouter();
   const { centroActivo } = useCentro();
@@ -39,6 +43,7 @@ export default function PacientesPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
 
   const centroId = centroActivo?.id;
+  const todayInput = formatFechaInput(new Date());
 
   const {
     register,
@@ -48,7 +53,7 @@ export default function PacientesPage() {
     formState: { errors },
   } = useForm<PacienteFormData>({
     resolver: zodResolver(pacienteSchema),
-    defaultValues: { estado_suscripcion: "activo" },
+    defaultValues: { estado_suscripcion: "activo", fecha_ingreso: todayInput },
   });
 
   const [showNuevoPlanForm, setShowNuevoPlanForm] = useState(false);
@@ -163,12 +168,9 @@ export default function PacientesPage() {
       const { error } = await supabase.from("pacientes").insert({
         centro_id: centroId,
         nombre_completo: data.nombre_completo,
-        email: data.email || null,
-        telefono: data.telefono || null,
-        fecha_nacimiento: data.fecha_nacimiento || null,
+        fecha_ingreso: data.fecha_ingreso,
         estado_suscripcion: data.estado_suscripcion,
         plan_id: data.plan_id || null,
-        notas: data.notas || null,
         estado_mensualidad: data.estado_suscripcion === "activo",
       });
       if (error) throw error;
@@ -187,12 +189,9 @@ export default function PacientesPage() {
         .from("pacientes")
         .update({
           nombre_completo: data.nombre_completo,
-          email: data.email || null,
-          telefono: data.telefono || null,
-          fecha_nacimiento: data.fecha_nacimiento || null,
+          fecha_ingreso: data.fecha_ingreso,
           estado_suscripcion: data.estado_suscripcion,
           plan_id: data.plan_id || null,
-          notas: data.notas || null,
           estado_mensualidad: data.estado_suscripcion === "activo",
         })
         .eq("id", id);
@@ -239,8 +238,6 @@ export default function PacientesPage() {
   });
 
   const activos = pacientes.filter((p) => p.estado_suscripcion === "activo").length;
-  const pausados = pacientes.filter((p) => p.estado_suscripcion === "pausado").length;
-  const inactivos = pacientes.filter((p) => p.estado_suscripcion === "cancelado").length;
 
   const now = new Date();
   const nuevosEsteMes = pacientes.filter((p) => {
@@ -270,7 +267,7 @@ export default function PacientesPage() {
           </div>
           <button
             className="btn-primary btn-pressable flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs tracking-wider uppercase"
-            onClick={() => { setShowForm(true); setEditingId(null); reset(); }}
+            onClick={() => { setShowForm(true); setEditingId(null); reset({ estado_suscripcion: "activo", fecha_ingreso: todayInput }); }}
             id="nuevo-paciente-btn"
           >
             <Plus size={15} strokeWidth={3} />
@@ -341,7 +338,7 @@ export default function PacientesPage() {
           </div>
 
           {/* Modal de Nuevo Paciente */}
-          <Dialog.Root open={showForm} onOpenChange={(open) => { if (!open) { reset(); setEditingId(null); } setShowForm(open); }}>
+          <Dialog.Root open={showForm} onOpenChange={(open) => { if (!open) { reset({ estado_suscripcion: "activo", fecha_ingreso: todayInput }); setEditingId(null); } setShowForm(open); }}>
             <Dialog.Portal>
               <AnimatePresence>
                 {showForm && (
@@ -410,36 +407,16 @@ export default function PacientesPage() {
                                 </div>
 
                                 <div className="form-group">
-                                  <label className="form-label" htmlFor="telefono">Teléfono</label>
+                                  <label className="form-label" htmlFor="fecha_ingreso">
+                                    Fecha de ingreso <span className="req">*</span>
+                                  </label>
                                   <input
-                                    id="telefono"
-                                    type="tel"
-                                    className="form-input"
-                                    placeholder="+504 9999-0000"
-                                    {...register("telefono")}
-                                  />
-                                </div>
-
-                                <div className="form-group">
-                                  <label className="form-label" htmlFor="pac-email">Correo electrónico</label>
-                                  <input
-                                    id="pac-email"
-                                    type="email"
-                                    className={`form-input ${errors.email ? "error" : ""}`}
-                                    placeholder="paciente@correo.com"
-                                    {...register("email")}
-                                  />
-                                  {errors.email && <p className="form-error">{errors.email.message}</p>}
-                                </div>
-
-                                <div className="form-group">
-                                  <label className="form-label" htmlFor="fecha_nacimiento">Fecha de nacimiento</label>
-                                  <input
-                                    id="fecha_nacimiento"
+                                    id="fecha_ingreso"
                                     type="date"
-                                    className="form-input"
-                                    {...register("fecha_nacimiento")}
+                                    className={`form-input ${errors.fecha_ingreso ? "error" : ""}`}
+                                    {...register("fecha_ingreso")}
                                   />
+                                  {errors.fecha_ingreso && <p className="form-error">{errors.fecha_ingreso.message}</p>}
                                 </div>
 
                                 <div className="form-group">
@@ -481,16 +458,6 @@ export default function PacientesPage() {
                                   </select>
                                 </div>
 
-                                <div className="form-group span-full">
-                                  <label className="form-label" htmlFor="notas">Notas</label>
-                                  <textarea
-                                    id="notas"
-                                    className="form-input form-textarea"
-                                    placeholder="Información adicional..."
-                                    rows={2}
-                                    {...register("notas")}
-                                  />
-                                </div>
                               </div>
 
                               <div className="form-actions mt-4">
@@ -656,8 +623,7 @@ export default function PacientesPage() {
                 <thead>
                   <tr>
                     <th>Paciente</th>
-                    <th>Contacto</th>
-                    <th>Última Visita</th>
+                    <th>Fecha de ingreso</th>
                     <th>Estado</th>
                     <th>Acciones</th>
                   </tr>
@@ -685,10 +651,6 @@ export default function PacientesPage() {
                           </div>
                         </div>
                       </td>
-                      <td>
-                        <span className="block text-xs font-semibold">{p.email || "—"}</span>
-                        <span className="block text-[10px] text-[var(--text-muted)] mt-0.5">{p.telefono || "—"}</span>
-                      </td>
                       <td className="font-mono text-xs text-[var(--text-muted)]">
                         {formatFechaCorta(p.fecha_ingreso)}
                       </td>
@@ -711,12 +673,9 @@ export default function PacientesPage() {
                               setEditingId(p.id);
                               reset({
                                 nombre_completo: p.nombre_completo,
-                                email: p.email || "",
-                                telefono: p.telefono || "",
-                                fecha_nacimiento: p.fecha_nacimiento || "",
+                                fecha_ingreso: toDateInputValue(p.fecha_ingreso),
                                 plan_id: p.plan_id || "",
                                 estado_suscripcion: p.estado_suscripcion,
-                                notas: p.notas || "",
                               });
                               setShowForm(true);
                             }}

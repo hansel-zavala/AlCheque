@@ -2,7 +2,7 @@
 
 import { use } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowLeft, Phone, Mail, Calendar, FileText, ExternalLink } from "lucide-react";
+import { ArrowLeft, Calendar, ExternalLink } from "lucide-react";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { createClient } from "@/lib/supabase/client";
@@ -102,49 +102,21 @@ export default function PacienteDetailPage({ params }: { params: Promise<{ id: s
           </div>
 
           <div className="ic-fields mt-4">
-            {paciente.telefono && (
-              <div className="ic-field flex items-center gap-2 text-sm text-[var(--text-muted)] py-1">
-                <Phone size={14} />
-                <span>{paciente.telefono}</span>
-              </div>
-            )}
-            {paciente.email && (
-              <div className="ic-field flex items-center gap-2 text-sm text-[var(--text-muted)] py-1">
-                <Mail size={14} />
-                <span>{paciente.email}</span>
-              </div>
-            )}
-            {paciente.fecha_nacimiento && (
-              <div className="ic-field flex items-center gap-2 text-sm text-[var(--text-muted)] py-1">
-                <Calendar size={14} />
-                <span>Nació el {formatFecha(paciente.fecha_nacimiento)}</span>
-              </div>
-            )}
             <div className="ic-field flex items-center gap-2 text-sm text-[var(--text-muted)] py-1">
               <Calendar size={14} />
               <span>Ingresó el {formatFecha(paciente.fecha_ingreso)}</span>
             </div>
           </div>
 
-          {(paciente as any).servicios && (
+          {paciente.servicios && (
             <div className="ic-plan mt-4 pt-4 border-t border-[var(--border)]">
               <span className="ic-plan-label block text-[10px] font-mono font-bold text-[var(--text-subtle)] uppercase tracking-wider">Plan activo</span>
-              <span className="ic-plan-name block text-sm font-bold text-[var(--text)] mt-1">{(paciente as any).servicios.nombre}</span>
-              {(paciente as any).servicios.precio && (
+              <span className="ic-plan-name block text-sm font-bold text-[var(--text)] mt-1">{paciente.servicios.nombre}</span>
+              {paciente.servicios.precio && (
                 <span className="ic-plan-price block text-xs font-mono font-bold text-[var(--accent)] mt-0.5">
-                  {formatHNL((paciente as any).servicios.precio)}/mes
+                  {formatHNL(paciente.servicios.precio)}/mes
                 </span>
               )}
-            </div>
-          )}
-
-          {paciente.notas && (
-            <div className="ic-notes mt-4 pt-4 border-t border-[var(--border)]">
-              <div className="ic-notes-header flex items-center gap-1.5 text-xs font-bold text-[var(--text-subtle)]">
-                <FileText size={14} />
-                <span>Notas</span>
-              </div>
-              <p className="ic-notes-text text-sm text-[var(--text-muted)] mt-1.5 leading-relaxed">{paciente.notas}</p>
             </div>
           )}
 
@@ -192,7 +164,7 @@ export default function PacienteDetailPage({ params }: { params: Promise<{ id: s
                   <div className="tl-content">
                     <div className="tl-top">
                       <span className="tl-categoria">
-                        {(pago as any).servicios?.nombre ?? (pago as any).categorias?.nombre ?? "Pago"}
+                        {pago.servicios?.nombre ?? pago.categorias?.nombre ?? "Pago"}
                       </span>
                       <span className="tl-monto">
                         {formatHNL(pago.monto)}

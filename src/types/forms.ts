@@ -28,12 +28,9 @@ export const registroSchema = z.object({
 
 export const pacienteSchema = z.object({
   nombre_completo: z.string().min(2, "El nombre es requerido").max(150),
-  email: z.string().email("Correo inválido").optional().or(z.literal("")),
-  telefono: z.string().optional(),
-  fecha_nacimiento: z.string().optional(),
+  fecha_ingreso: z.string().min(1, "La fecha de ingreso es requerida"),
   estado_suscripcion: z.enum(["activo", "pausado", "cancelado"]),
   plan_id: z.string().uuid().optional().or(z.literal("")),
-  notas: z.string().optional(),
 });
 
 export const transaccionSchema = z.object({

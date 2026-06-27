@@ -144,14 +144,10 @@ export interface Database {
           id: string;
           centro_id: string;
           nombre_completo: string;
-          email: string | null;
-          telefono: string | null;
-          fecha_nacimiento: string | null;
           fecha_ingreso: string;
           estado_mensualidad: boolean;
           estado_suscripcion: "activo" | "pausado" | "cancelado";
           plan_id: string | null;
-          notas: string | null;
           created_at: string;
           updated_at: string;
           deleted_at: string | null;
@@ -160,27 +156,20 @@ export interface Database {
           id?: string;
           centro_id: string;
           nombre_completo: string;
-          email?: string | null;
-          telefono?: string | null;
-          fecha_nacimiento?: string | null;
           fecha_ingreso?: string;
           estado_mensualidad?: boolean;
           estado_suscripcion?: "activo" | "pausado" | "cancelado";
           plan_id?: string | null;
-          notas?: string | null;
           created_at?: string;
           updated_at?: string;
           deleted_at?: string | null;
         };
         Update: {
           nombre_completo?: string;
-          email?: string | null;
-          telefono?: string | null;
-          fecha_nacimiento?: string | null;
+          fecha_ingreso?: string;
           estado_mensualidad?: boolean;
           estado_suscripcion?: "activo" | "pausado" | "cancelado";
           plan_id?: string | null;
-          notas?: string | null;
           updated_at?: string;
           deleted_at?: string | null;
         };
@@ -233,9 +222,9 @@ export interface Database {
         };
       };
     };
-    Views: {};
-    Functions: {};
-    Enums: {};
+    Views: Record<string, never>;
+    Functions: Record<string, never>;
+    Enums: Record<string, never>;
   };
 }
 

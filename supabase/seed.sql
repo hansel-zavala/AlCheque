@@ -68,16 +68,16 @@ BEGIN
   RETURNING id INTO v_terapeuta1;
 
   -- Pacientes de ejemplo
-  INSERT INTO pacientes (centro_id, nombre_completo, telefono, estado_mensualidad, estado_suscripcion, plan_id)
-  VALUES (v_centro_id, 'Carlos Rodríguez', '+504 9777-2222', true, 'activo', v_plan1_id)
+  INSERT INTO pacientes (centro_id, nombre_completo, estado_mensualidad, estado_suscripcion, plan_id)
+  VALUES (v_centro_id, 'Carlos Rodríguez', true, 'activo', v_plan1_id)
   RETURNING id INTO v_paciente1;
 
-  INSERT INTO pacientes (centro_id, nombre_completo, telefono, estado_mensualidad, estado_suscripcion, plan_id)
-  VALUES (v_centro_id, 'Ana Martínez', '+504 9666-3333', true, 'activo', v_plan2_id)
+  INSERT INTO pacientes (centro_id, nombre_completo, estado_mensualidad, estado_suscripcion, plan_id)
+  VALUES (v_centro_id, 'Ana Martínez', true, 'activo', v_plan2_id)
   RETURNING id INTO v_paciente2;
 
-  INSERT INTO pacientes (centro_id, nombre_completo, telefono, estado_mensualidad, estado_suscripcion, plan_id)
-  VALUES (v_centro_id, 'Juan Pérez', '+504 9555-4444', false, 'pausado', v_plan1_id);
+  INSERT INTO pacientes (centro_id, nombre_completo, estado_mensualidad, estado_suscripcion, plan_id)
+  VALUES (v_centro_id, 'Juan Pérez', false, 'pausado', v_plan1_id);
 
   -- Transacciones de ejemplo (últimos 2 meses)
   -- Ingresos vinculados a plan/servicio e indirectamente a categoría

@@ -307,7 +307,7 @@ export default function DashboardPage() {
 
         .charts-grid {
           display: grid;
-          grid-template-columns: 1fr 340px;
+          grid-template-columns: 1fr 380px;
           gap: 1rem;
         }
 
