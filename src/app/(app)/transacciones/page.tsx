@@ -4,7 +4,7 @@ import { useState, useEffect, Suspense } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Plus, Trash2, Eye, ArrowUpCircle, ArrowDownCircle, ArrowLeftRight, X, Pencil } from "lucide-react";
+import { Plus, Trash2, Eye, ArrowUpCircle, ArrowDownCircle, ArrowLeftRight, X, Pencil, Filter, Search } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import * as Dialog from "@radix-ui/react-dialog";
@@ -21,12 +21,30 @@ type CategoriaConParent = Categoria & {
   parent?: Pick<Categoria, "id" | "nombre"> | null;
 };
 
+type FiltroMetodoPago = "todos" | "efectivo" | "transferencia" | "tarjeta";
+
+const METODOS_PAGO: { value: FiltroMetodoPago; label: string }[] = [
+  { value: "todos", label: "Todos" },
+  { value: "efectivo", label: "Efectivo" },
+  { value: "transferencia", label: "Transferencia" },
+  { value: "tarjeta", label: "Tarjeta" },
+];
+
+function formatCategoriaLabel(categoria: CategoriaConParent) {
+  return categoria.parent_id && categoria.parent ? `${categoria.parent.nombre} > ${categoria.nombre}` : categoria.nombre;
+}
+
 function TransaccionesContent() {
   const { centroActivo } = useCentro();
   const supabase = createClient();
   const queryClient = useQueryClient();
   const [showForm, setShowForm] = useState(false);
   const [filtroTipo, setFiltroTipo] = useState<"todos" | "ingreso" | "egreso">("todos");
+  const [showFiltros, setShowFiltros] = useState(false);
+  const [filtroMetodoPago, setFiltroMetodoPago] = useState<FiltroMetodoPago>("todos");
+  const [filtroCategoriaId, setFiltroCategoriaId] = useState("todos");
+  const [filtroPacienteId, setFiltroPacienteId] = useState("todos");
+  const [categoriaSearch, setCategoriaSearch] = useState("");
   const [comprobanteUrl, setComprobanteUrl] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
 
@@ -73,6 +91,11 @@ function TransaccionesContent() {
   }, [searchParams]);
 
   const centroId = centroActivo?.id;
+  const now = new Date();
+  const [fechaInicio, setFechaInicio] = useState(
+    `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`
+  );
+  const [fechaFin, setFechaFin] = useState(now.toISOString().split("T")[0]);
 
   const {
     register,
@@ -94,7 +117,7 @@ function TransaccionesContent() {
 
   // Queries
   const { data: transacciones = [], isLoading } = useQuery({
-    queryKey: ["transacciones", centroId, filtroTipo],
+    queryKey: ["transacciones", centroId, filtroTipo, fechaInicio, fechaFin, filtroMetodoPago, filtroPacienteId],
     queryFn: async () => {
       if (!centroId) return [];
       let q = supabase
@@ -102,19 +125,33 @@ function TransaccionesContent() {
         .select("*, servicios(id,nombre,servicio,categoria_id), categorias(id,nombre,tipo,parent_id,parent:parent_id(id,nombre)), pacientes(id,nombre_completo), terapeutas(id,nombre_completo)")
         .eq("centro_id", centroId)
         .is("deleted_at", null)
+        .gte("fecha", fechaInicio)
+        .lte("fecha", fechaFin)
         .order("fecha", { ascending: false })
         .order("created_at", { ascending: false });
       if (filtroTipo !== "todos") q = q.eq("tipo", filtroTipo);
+      if (filtroMetodoPago !== "todos") q = q.eq("metodo_pago", filtroMetodoPago);
+      if (filtroPacienteId !== "todos") q = q.eq("paciente_id", filtroPacienteId);
       const { data } = await q;
       return (data ?? []) as unknown as TransaccionConRelaciones[];
     },
     enabled: !!centroId,
   });
 
+  const transaccionesFiltradas =
+    filtroCategoriaId === "todos"
+      ? transacciones
+      : transacciones.filter(
+          (t) =>
+            t.categoria_id === filtroCategoriaId ||
+            t.servicios?.categoria_id === filtroCategoriaId ||
+            t.categorias?.parent_id === filtroCategoriaId
+        );
+
   const transaccionesPagination = usePagination({
-    items: transacciones,
+    items: transaccionesFiltradas,
     storageKey: "pagination:transacciones",
-    resetKey: `${centroId ?? ""}:${filtroTipo}`,
+    resetKey: `${centroId ?? ""}:${filtroTipo}:${fechaInicio}:${fechaFin}:${filtroMetodoPago}:${filtroCategoriaId}:${filtroPacienteId}`,
   });
 
   const { data: categorias = [] } = useQuery({
@@ -274,6 +311,32 @@ function TransaccionesContent() {
   const categoriasFiltradas = categorias.filter((c) =>
     tipoSeleccionado === "ingreso" ? c.tipo === "ingreso" : c.tipo === "egreso"
   );
+
+  const categoriasParaFiltro = categorias.filter((c) => {
+    if (filtroTipo !== "todos" && c.tipo !== filtroTipo) return false;
+
+    const search = categoriaSearch.trim().toLowerCase();
+    if (!search) return true;
+
+    return formatCategoriaLabel(c).toLowerCase().includes(search);
+  });
+
+  const categoriasIngresoFiltro = categoriasParaFiltro.filter((c) => c.tipo === "ingreso");
+  const categoriasEgresoFiltro = categoriasParaFiltro.filter((c) => c.tipo === "egreso");
+  const categoriaSeleccionada = categorias.find((c) => c.id === filtroCategoriaId);
+  const pacienteSeleccionado = pacientes.find((p) => p.id === filtroPacienteId);
+  const filtrosActivos = [
+    filtroMetodoPago !== "todos",
+    filtroCategoriaId !== "todos",
+    filtroPacienteId !== "todos",
+  ].filter(Boolean).length;
+
+  const limpiarFiltros = () => {
+    setFiltroMetodoPago("todos");
+    setFiltroCategoriaId("todos");
+    setFiltroPacienteId("todos");
+    setCategoriaSearch("");
+  };
 
   return (
     <div className="page animate-fade-in-up">
@@ -677,6 +740,67 @@ function TransaccionesContent() {
         </Dialog.Portal>
       </Dialog.Root>
 
+      {/* Filtros de fecha */}
+      <div className="filters-card glass-card">
+        <div className="filter-group">
+          <label className="form-label" htmlFor="fecha-inicio-transacciones">Desde</label>
+          <input
+            id="fecha-inicio-transacciones"
+            type="date"
+            className="form-input"
+            value={fechaInicio}
+            onChange={(e) => setFechaInicio(e.target.value)}
+          />
+        </div>
+        <div className="filter-group">
+          <label className="form-label" htmlFor="fecha-fin-transacciones">Hasta</label>
+          <input
+            id="fecha-fin-transacciones"
+            type="date"
+            className="form-input"
+            value={fechaFin}
+            onChange={(e) => setFechaFin(e.target.value)}
+          />
+        </div>
+        <div className="filter-quick">
+          <span className="filter-label">Accesos rápidos:</span>
+          {[
+            {
+              label: "Este mes",
+              action: () => {
+                const d = new Date();
+                setFechaInicio(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`);
+                setFechaFin(d.toISOString().split("T")[0]);
+              },
+            },
+            {
+              label: "Mes anterior",
+              action: () => {
+                const d = new Date();
+                d.setMonth(d.getMonth() - 1);
+                const y = d.getFullYear();
+                const m = d.getMonth() + 1;
+                const daysInMonth = new Date(y, m, 0).getDate();
+                setFechaInicio(`${y}-${String(m).padStart(2, "0")}-01`);
+                setFechaFin(`${y}-${String(m).padStart(2, "0")}-${String(daysInMonth).padStart(2, "0")}`);
+              },
+            },
+            {
+              label: "Este año",
+              action: () => {
+                const y = new Date().getFullYear();
+                setFechaInicio(`${y}-01-01`);
+                setFechaFin(`${y}-12-31`);
+              },
+            },
+          ].map((q) => (
+            <button key={q.label} type="button" className="quick-btn btn-pressable" onClick={q.action}>
+              {q.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
       {/* Historial Card (Double Bezel Layout & Apple Glassmorphism) */}
       <div className="p-1.5 bg-white/5 dark:bg-white/5 border border-white/10 dark:border-white/5 rounded-[28px] shadow-2xl backdrop-blur-xl">
         <div className="bg-white/45 dark:bg-[#131b2e]/40 border border-white/10 dark:border-white/5 rounded-[22px] p-6">
@@ -684,10 +808,118 @@ function TransaccionesContent() {
             <div className="flex items-center gap-2.5">
               <h2 className="directory-title text-base font-extrabold tracking-tight">Historial de Transacciones</h2>
               <span className="badge badge-muted text-[10px] font-bold">
-                {transacciones.length} registros
+                {transaccionesFiltradas.length} registros
               </span>
             </div>
             <div className="flex items-center gap-2 flex-wrap">
+              <div className="filters-wrap">
+                <button
+                  type="button"
+                  className="btn-filter btn-pressable flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[var(--border)] text-xs font-semibold text-[var(--text-muted)]"
+                  onClick={() => setShowFiltros((current) => !current)}
+                  aria-expanded={showFiltros}
+                  aria-haspopup="menu"
+                >
+                  <Filter size={13} />
+                  <span>Filtros</span>
+                  {filtrosActivos > 0 && <span className="filter-count">{filtrosActivos}</span>}
+                </button>
+                {showFiltros && (
+                  <div className="filters-menu" role="menu" aria-label="Filtros de transacciones">
+                    <div className="filters-menu-head">
+                      <span className="filters-title">Filtrar por</span>
+                      {filtrosActivos > 0 && (
+                        <button type="button" className="clear-filters" onClick={limpiarFiltros}>
+                          Limpiar
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="filter-block">
+                      <span className="filters-subtitle">Método de pago</span>
+                      <div className="method-grid">
+                        {METODOS_PAGO.map((option) => (
+                          <button
+                            key={option.value}
+                            type="button"
+                            className={`filter-pill ${filtroMetodoPago === option.value ? "active" : ""}`}
+                            onClick={() => setFiltroMetodoPago(option.value)}
+                          >
+                            {option.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="filter-block">
+                      <span className="filters-subtitle">Paciente</span>
+                      <select
+                        className="filter-select"
+                        value={filtroPacienteId}
+                        onChange={(e) => setFiltroPacienteId(e.target.value)}
+                      >
+                        <option value="todos">Todos los pacientes</option>
+                        {pacientes.map((p) => (
+                          <option key={p.id} value={p.id}>
+                            {p.nombre_completo}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="filter-block">
+                      <span className="filters-subtitle">Categoría</span>
+                      <button
+                        type="button"
+                        className={`category-option ${filtroCategoriaId === "todos" ? "active" : ""}`}
+                        onClick={() => setFiltroCategoriaId("todos")}
+                      >
+                        Todas las categorías
+                      </button>
+                      <div className="category-search">
+                        <Search size={13} />
+                        <input
+                          type="text"
+                          value={categoriaSearch}
+                          onChange={(e) => setCategoriaSearch(e.target.value)}
+                          placeholder="Buscar categoría..."
+                        />
+                      </div>
+                      <div className="category-list">
+                        {filtroTipo === "todos" && categoriasIngresoFiltro.length > 0 && (
+                          <span className="category-group-title">Ingresos</span>
+                        )}
+                        {categoriasIngresoFiltro.map((c) => (
+                          <button
+                            key={c.id}
+                            type="button"
+                            className={`category-option ${filtroCategoriaId === c.id ? "active" : ""}`}
+                            onClick={() => setFiltroCategoriaId(c.id)}
+                          >
+                            {formatCategoriaLabel(c)}
+                          </button>
+                        ))}
+                        {filtroTipo === "todos" && categoriasEgresoFiltro.length > 0 && (
+                          <span className="category-group-title">Egresos</span>
+                        )}
+                        {categoriasEgresoFiltro.map((c) => (
+                          <button
+                            key={c.id}
+                            type="button"
+                            className={`category-option ${filtroCategoriaId === c.id ? "active" : ""}`}
+                            onClick={() => setFiltroCategoriaId(c.id)}
+                          >
+                            {formatCategoriaLabel(c)}
+                          </button>
+                        ))}
+                        {categoriasParaFiltro.length === 0 && (
+                          <span className="empty-filter-result">No hay categorías disponibles</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
               <div className="relative flex gap-0.5 bg-[var(--bg-subtle)] border border-[var(--border)] rounded-xl p-1">
                 {[
                   { value: "todos" as const, label: "Todos" },
@@ -701,7 +933,12 @@ function TransaccionesContent() {
                       className={`relative px-4 py-1.5 rounded-lg text-xs font-bold transition-colors cursor-pointer focus:outline-none z-10 ${
                         active ? "text-[var(--text)]" : "text-[var(--text-muted)] hover:text-[var(--text)]"
                       }`}
-                      onClick={() => setFiltroTipo(tab.value)}
+                      onClick={() => {
+                        setFiltroTipo(tab.value);
+                        if (categoriaSeleccionada && tab.value !== "todos" && categoriaSeleccionada.tipo !== tab.value) {
+                          setFiltroCategoriaId("todos");
+                        }
+                      }}
                     >
                       {active && (
                         <motion.div
@@ -718,6 +955,23 @@ function TransaccionesContent() {
             </div>
           </div>
 
+          {(filtroMetodoPago !== "todos" || filtroCategoriaId !== "todos" || filtroPacienteId !== "todos") && (
+            <div className="active-filters">
+              <span className="active-filters-label">Filtros activos:</span>
+              {filtroMetodoPago !== "todos" && (
+                <span className="active-filter-chip">
+                  Método: {METODOS_PAGO.find((option) => option.value === filtroMetodoPago)?.label}
+                </span>
+              )}
+              {categoriaSeleccionada && (
+                <span className="active-filter-chip">Categoría: {formatCategoriaLabel(categoriaSeleccionada)}</span>
+              )}
+              {pacienteSeleccionado && (
+                <span className="active-filter-chip">Paciente: {pacienteSeleccionado.nombre_completo}</span>
+              )}
+            </div>
+          )}
+
           {/* Lista */}
           {isLoading ? (
             <div className="list-loading">
@@ -725,7 +979,7 @@ function TransaccionesContent() {
                 <div key={i} className="skeleton-row" />
               ))}
             </div>
-          ) : transacciones.length === 0 ? (
+          ) : transaccionesFiltradas.length === 0 ? (
             <div className="list-empty">
               <ArrowLeftRight size={28} style={{ color: "var(--text-subtle)" }} />
               <p>No hay transacciones registradas</p>
@@ -846,7 +1100,7 @@ function TransaccionesContent() {
           )}
         </div>
         <Pagination
-          totalItems={transacciones.length}
+          totalItems={transaccionesFiltradas.length}
           page={transaccionesPagination.page}
           pageSize={transaccionesPagination.pageSize}
           totalPages={transaccionesPagination.totalPages}
@@ -867,6 +1121,255 @@ function TransaccionesContent() {
         .page-title {
           color: var(--text);
           letter-spacing: -0.025em;
+        }
+
+        .filters-card {
+          display: flex;
+          align-items: flex-end;
+          gap: 1.25rem;
+          flex-wrap: wrap;
+        }
+
+        .filter-group {
+          display: flex;
+          flex-direction: column;
+          flex: 1;
+          min-width: 200px;
+        }
+
+        .filter-quick {
+          display: flex;
+          align-items: center;
+          gap: 0.5rem;
+          flex-wrap: wrap;
+          margin-top: 1rem;
+          width: 100%;
+        }
+
+        .filter-label {
+          color: var(--text-subtle);
+          font-family: var(--font-mono);
+          font-size: 0.75rem;
+          font-weight: 700;
+          letter-spacing: 0.05em;
+          text-transform: uppercase;
+        }
+
+        .quick-btn {
+          padding: 0.375rem 0.75rem;
+          border-radius: 99px;
+          border: 1px solid var(--border);
+          background: var(--bg-subtle);
+          color: var(--text-muted);
+          cursor: pointer;
+          font-family: var(--font-sans);
+          font-size: 0.75rem;
+          font-weight: 600;
+          transition: all 150ms var(--ease-out);
+        }
+
+        .quick-btn:hover {
+          background: var(--accent-muted);
+          color: var(--accent);
+          border-color: var(--accent);
+        }
+
+        .filters-wrap {
+          position: relative;
+        }
+
+        .filter-count {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          min-width: 1rem;
+          height: 1rem;
+          border-radius: 999px;
+          background: var(--accent);
+          color: var(--accent-fg);
+          font-size: 0.625rem;
+          font-weight: 900;
+        }
+
+        .filters-menu {
+          position: absolute;
+          top: calc(100% + 0.5rem);
+          right: 0;
+          z-index: 40;
+          width: min(360px, calc(100vw - 2rem));
+          max-height: min(680px, calc(100vh - 10rem));
+          overflow: auto;
+          padding: 0.75rem;
+          border: 1px solid var(--border);
+          border-radius: 18px;
+          background: var(--surface);
+          box-shadow: var(--shadow-lg);
+        }
+
+        .filters-menu-head {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 0.75rem;
+          margin-bottom: 0.5rem;
+        }
+
+        .filters-title,
+        .filters-subtitle {
+          display: block;
+          color: var(--text-subtle);
+          font-size: 0.625rem;
+          font-weight: 800;
+          letter-spacing: 0.08em;
+          text-transform: uppercase;
+        }
+
+        .clear-filters {
+          border: 0;
+          background: transparent;
+          color: var(--accent);
+          cursor: pointer;
+          font-family: var(--font-sans);
+          font-size: 0.6875rem;
+          font-weight: 800;
+          text-transform: uppercase;
+        }
+
+        .filter-block {
+          display: flex;
+          flex-direction: column;
+          gap: 0.5rem;
+          padding: 0.75rem 0;
+          border-top: 1px solid var(--border);
+        }
+
+        .method-grid {
+          display: grid;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 0.375rem;
+        }
+
+        .filter-pill,
+        .category-option {
+          border: 0;
+          border-radius: 10px;
+          background: transparent;
+          color: var(--text-muted);
+          cursor: pointer;
+          font-family: var(--font-sans);
+          font-size: 0.8125rem;
+          font-weight: 700;
+          padding: 0.55rem 0.625rem;
+          text-align: left;
+          transition: background 150ms var(--ease-out), color 150ms;
+        }
+
+        .filter-pill {
+          text-align: center;
+        }
+
+        .filter-pill:hover,
+        .filter-pill.active,
+        .category-option:hover,
+        .category-option.active {
+          background: var(--bg-subtle);
+          color: var(--text);
+        }
+
+        .filter-select {
+          width: 100%;
+          min-height: 38px;
+          border: 1px solid var(--border);
+          border-radius: 10px;
+          background: var(--bg-subtle);
+          color: var(--text);
+          font-family: var(--font-sans);
+          font-size: 0.8125rem;
+          font-weight: 700;
+          outline: none;
+          padding: 0 0.75rem;
+        }
+
+        .category-search {
+          display: flex;
+          align-items: center;
+          gap: 0.5rem;
+          border: 1px solid var(--border);
+          border-radius: 10px;
+          background: var(--bg-subtle);
+          color: var(--text-subtle);
+          padding: 0 0.625rem;
+        }
+
+        .category-search input {
+          width: 100%;
+          min-height: 36px;
+          border: 0;
+          background: transparent;
+          color: var(--text);
+          font-family: var(--font-sans);
+          font-size: 0.8125rem;
+          font-weight: 600;
+          outline: none;
+        }
+
+        .category-list {
+          display: flex;
+          flex-direction: column;
+          gap: 0.125rem;
+          max-height: 220px;
+          overflow: auto;
+          padding-right: 0.25rem;
+        }
+
+        .category-group-title {
+          padding: 0.5rem 0.625rem 0.25rem;
+          color: var(--text-subtle);
+          font-size: 0.625rem;
+          font-weight: 900;
+          letter-spacing: 0.08em;
+          text-transform: uppercase;
+        }
+
+        .empty-filter-result {
+          padding: 0.75rem 0.625rem;
+          color: var(--text-subtle);
+          font-size: 0.75rem;
+          font-weight: 700;
+        }
+
+        .active-filters {
+          display: flex;
+          align-items: center;
+          gap: 0.5rem;
+          flex-wrap: wrap;
+          margin: -0.5rem 0 1rem;
+        }
+
+        .active-filters-label {
+          color: var(--text-subtle);
+          font-family: var(--font-mono);
+          font-size: 0.6875rem;
+          font-weight: 800;
+          letter-spacing: 0.05em;
+          text-transform: uppercase;
+        }
+
+        .active-filter-chip {
+          border: 1px solid var(--border);
+          border-radius: 999px;
+          background: var(--bg-subtle);
+          color: var(--text-muted);
+          font-size: 0.75rem;
+          font-weight: 700;
+          padding: 0.3rem 0.65rem;
+        }
+
+        @media (max-width: 600px) {
+          .filters-menu {
+            left: 0;
+            right: auto;
+          }
         }
 
         .form-select {
