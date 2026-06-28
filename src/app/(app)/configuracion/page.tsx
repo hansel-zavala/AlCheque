@@ -1,10 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Building2, Plus, Trash2, Users, Tag, Folder, Sun, Moon, Monitor, Check, ShieldAlert, Calendar, Pencil } from "lucide-react";
+import { Building2, Plus, Trash2, Users, Tag, Folder, Sun, Moon, Monitor, Check, ShieldAlert, Calendar, Pencil, ChevronDown } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { createClient } from "@/lib/supabase/client";
@@ -20,6 +20,10 @@ import type { Servicio, Categoria, Terapeuta } from "@/types/database";
 type Tab = "centro" | "servicios" | "categorias" | "terapeutas" | "apariencia";
 type ServicioConCategoria = Servicio & { categorias?: Pick<Categoria, "id" | "nombre"> | null };
 type CategoriaConParent = Categoria & { parent?: Pick<Categoria, "id" | "nombre"> | null };
+type CategoriaSection = {
+  parent: CategoriaConParent;
+  children: CategoriaConParent[];
+};
 
 const TABS: { id: Tab; label: string; icon: LucideIcon }[] = [
   { id: "centro", label: "Datos del centro", icon: Building2 },
@@ -181,14 +185,9 @@ export default function ConfiguracionPage() {
     enabled: !!centroId,
   });
 
-  const categoriasPagination = usePagination({
-    items: categorias,
-    storageKey: "pagination:configuracion-categorias",
-    resetKey: `${centroId ?? ""}:${activeTab}`,
-  });
-
   const [showCategoriaForm, setShowCategoriaForm] = useState(false);
   const [editingCategoriaId, setEditingCategoriaId] = useState<string | null>(null);
+  const [expandedCategorySections, setExpandedCategorySections] = useState<Set<string>>(() => new Set());
 
   const categoriaForm = useForm<CategoriaFormData>({
     resolver: zodResolver(categoriaSchema),
@@ -196,6 +195,35 @@ export default function ConfiguracionPage() {
   });
 
   const watchTipo = categoriaForm.watch("tipo") || "egreso";
+
+  const categoriaRootIds = new Set(categorias.filter((c) => !c.parent_id).map((c) => c.id));
+  const categoriaSections: CategoriaSection[] = categorias
+    .filter((c) => !c.parent_id)
+    .map((parent) => ({
+      parent,
+      children: categorias.filter((c) => c.parent_id === parent.id),
+    }));
+  const categoriasIngresoSections = categoriaSections.filter((section) => section.parent.tipo === "ingreso");
+  const categoriasEgresoSections = categoriaSections.filter((section) => section.parent.tipo === "egreso");
+  const categoriasSinPrincipal = categorias.filter((c) => c.parent_id && !categoriaRootIds.has(c.parent_id));
+
+  useEffect(() => {
+    if (activeTab === "categorias") {
+      setExpandedCategorySections(new Set());
+    }
+  }, [activeTab]);
+
+  const toggleCategorySection = (id: string) => {
+    setExpandedCategorySections((current) => {
+      const next = new Set(current);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
 
   const createCategoriaMutation = useMutation({
     mutationFn: async (data: CategoriaFormData) => {
@@ -250,6 +278,57 @@ export default function ConfiguracionPage() {
       queryClient.invalidateQueries({ queryKey: ["categorias"] });
     },
   });
+
+  const editCategoria = (categoria: CategoriaConParent) => {
+    setEditingCategoriaId(categoria.id);
+    categoriaForm.reset({
+      nombre: categoria.nombre,
+      tipo: categoria.tipo,
+      parent_id: categoria.parent_id || "",
+      activo: categoria.activo,
+    });
+    setShowCategoriaForm(true);
+  };
+
+  const renderCategoriaRow = (categoria: CategoriaConParent, variant: "parent" | "child" | "orphan" = "parent") => (
+    <div key={categoria.id} className={`category-row ${variant}`}>
+      <div className="item-info">
+        <span className="item-name text-sm font-semibold text-[var(--text)]">{categoria.nombre}</span>
+        {variant === "parent" && (
+          <span className="item-meta text-xs text-[var(--text-muted)] block mt-0.5">Categoría principal</span>
+        )}
+        {categoria.parent && variant !== "parent" && (
+          <span className="item-meta text-xs text-[var(--text-muted)] block mt-0.5">
+            Subcategoría de: <strong className="text-[var(--text)]">{categoria.parent.nombre}</strong>
+          </span>
+        )}
+        {variant === "orphan" && !categoria.parent && (
+          <span className="item-meta text-xs text-[var(--text-muted)] block mt-0.5">Sin categoría principal disponible</span>
+        )}
+      </div>
+      <div className="item-right flex items-center gap-3">
+        <span className={`badge ${categoria.tipo === "ingreso" ? "badge-green" : "badge-red"}`}>
+          {categoria.tipo === "ingreso" ? "Ingreso" : "Egreso"}
+        </span>
+        <button
+          className="icon-btn btn-pressable"
+          onClick={() => editCategoria(categoria)}
+          aria-label="Editar categoría"
+        >
+          <Pencil size={14} />
+        </button>
+        <button
+          className="icon-btn danger btn-pressable"
+          onClick={() => {
+            if (confirm("¿Eliminar esta categoría?")) deleteCategoriaMutation.mutate(categoria.id);
+          }}
+          aria-label="Eliminar categoría"
+        >
+          <Trash2 size={14} />
+        </button>
+      </div>
+    </div>
+  );
 
   // ── Terapeutas ────────────────────────────────────────────────
   const { data: terapeutas = [] } = useQuery({
@@ -762,63 +841,86 @@ export default function ConfiguracionPage() {
             )}
           </AnimatePresence>
 
-          <div className="items-list flex flex-col gap-2">
+          <div className="category-hierarchy">
             {categorias.length === 0 ? (
               <p className="items-empty text-center p-8 text-sm text-[var(--text-subtle)] font-medium">No hay categorías configuradas</p>
             ) : (
-              categoriasPagination.paginatedItems.map((c) => (
-                <div key={c.id} className="item-row flex items-center justify-between p-3 border border-[var(--border)] rounded-xl bg-[var(--bg-subtle)] hover:bg-[var(--surface-hover)] transition-all">
-                  <div className="item-info">
-                    <span className="item-name text-sm font-semibold text-[var(--text)]">{c.nombre}</span>
-                    {c.parent && (
-                      <span className="item-meta text-xs text-[var(--text-muted)] block mt-0.5">
-                        Subcategoría de: <strong className="text-[var(--text)]">{c.parent.nombre}</strong>
-                      </span>
-                    )}
+              <>
+                {[
+                  { title: "Categorías de ingreso", sections: categoriasIngresoSections },
+                  { title: "Categorías de egreso", sections: categoriasEgresoSections },
+                ].map((group) => (
+                  group.sections.length > 0 && (
+                    <div key={group.title} className="category-type-group">
+                      <h3 className="category-type-title">{group.title}</h3>
+                      <div className="category-sections">
+                        {group.sections.map(({ parent, children }) => {
+                          const collapsed = !expandedCategorySections.has(parent.id);
+
+                          return (
+                            <section key={parent.id} className="category-section">
+                              <button
+                                type="button"
+                                className="category-section-head"
+                                onClick={() => toggleCategorySection(parent.id)}
+                                aria-expanded={!collapsed}
+                              >
+                                <div>
+                                  <span className="category-section-title">{parent.nombre}</span>
+                                  <span className="category-section-meta">
+                                    {children.length} {children.length === 1 ? "subcategoría" : "subcategorías"}
+                                  </span>
+                                </div>
+                                <div className="category-section-actions">
+                                  <span className={`badge ${parent.tipo === "ingreso" ? "badge-green" : "badge-red"}`}>
+                                    {parent.tipo === "ingreso" ? "Ingreso" : "Egreso"}
+                                  </span>
+                                  <ChevronDown size={16} className={`category-chevron ${collapsed ? "collapsed" : ""}`} />
+                                </div>
+                              </button>
+                              <AnimatePresence initial={false}>
+                                {!collapsed && (
+                                  <motion.div
+                                    className="category-section-body"
+                                    initial={{ opacity: 0, height: 0 }}
+                                    animate={{ opacity: 1, height: "auto" }}
+                                    exit={{ opacity: 0, height: 0 }}
+                                    transition={{ duration: 0.2 }}
+                                  >
+                                    {renderCategoriaRow(parent)}
+                                    {children.length > 0 ? (
+                                      <div className="subcategory-list">
+                                        {children.map((child) => renderCategoriaRow(child, "child"))}
+                                      </div>
+                                    ) : (
+                                      <p className="subcategory-empty">Esta categoría aún no tiene subcategorías.</p>
+                                    )}
+                                  </motion.div>
+                                )}
+                              </AnimatePresence>
+                            </section>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )
+                ))}
+
+                {categoriasSinPrincipal.length > 0 && (
+                  <div className="category-type-group">
+                    <h3 className="category-type-title">Sin categoría principal</h3>
+                    <div className="category-sections">
+                      <section className="category-section">
+                        <div className="category-section-body visible">
+                          {categoriasSinPrincipal.map((categoria) => renderCategoriaRow(categoria, "orphan"))}
+                        </div>
+                      </section>
+                    </div>
                   </div>
-                  <div className="item-right flex items-center gap-3">
-                    <span className={`badge ${c.tipo === "ingreso" ? "badge-green" : "badge-red"}`}>
-                      {c.tipo === "ingreso" ? "Ingreso" : "Egreso"}
-                    </span>
-                    <button
-                      className="icon-btn btn-pressable"
-                      onClick={() => {
-                        setEditingCategoriaId(c.id);
-                        categoriaForm.reset({
-                          nombre: c.nombre,
-                          tipo: c.tipo,
-                          parent_id: c.parent_id || "",
-                          activo: c.activo,
-                        });
-                        setShowCategoriaForm(true);
-                      }}
-                      aria-label="Editar categoría"
-                    >
-                      <Pencil size={14} />
-                    </button>
-                    <button
-                      className="icon-btn danger btn-pressable"
-                      onClick={() => {
-                        if (confirm("¿Eliminar esta categoría?")) deleteCategoriaMutation.mutate(c.id);
-                      }}
-                      aria-label="Eliminar categoría"
-                    >
-                      <Trash2 size={14} />
-                    </button>
-                  </div>
-                </div>
-              ))
+                )}
+              </>
             )}
           </div>
-          <Pagination
-            totalItems={categorias.length}
-            page={categoriasPagination.page}
-            pageSize={categoriasPagination.pageSize}
-            totalPages={categoriasPagination.totalPages}
-            itemLabel="categorías"
-            onPageChange={categoriasPagination.setPage}
-            onPageSizeChange={categoriasPagination.setPageSize}
-          />
         </motion.div>
       )}
 
@@ -1064,13 +1166,205 @@ export default function ConfiguracionPage() {
         .icon-btn:hover { background: var(--surface-hover); color: var(--text); border-color: var(--border-strong); }
         .icon-btn.danger:hover { background: var(--red-muted); color: var(--red); border-color: var(--red); }
 
+        .category-hierarchy {
+          display: flex;
+          flex-direction: column;
+          gap: 1.25rem;
+        }
+
+        .category-type-group {
+          display: flex;
+          flex-direction: column;
+          gap: 0.75rem;
+        }
+
+        .category-type-title {
+          color: var(--text-subtle);
+          font-family: var(--font-mono);
+          font-size: 0.75rem;
+          font-weight: 800;
+          letter-spacing: 0.08em;
+          margin: 0;
+          text-transform: uppercase;
+        }
+
+        .category-sections {
+          display: grid;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 0.875rem;
+        }
+
+        .category-section {
+          border: 1px solid var(--border);
+          border-radius: 20px;
+          background: color-mix(in oklch, var(--bg-subtle) 82%, transparent);
+          overflow: hidden;
+        }
+
+        .category-section-head {
+          width: 100%;
+          border: 0;
+          background: transparent;
+          color: var(--text);
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 1rem;
+          padding: 1.1rem 1.15rem;
+          text-align: left;
+        }
+
+        .category-section-head:hover {
+          background: var(--surface-hover);
+        }
+
+        .category-section-title {
+          display: block;
+          color: var(--text);
+          font-size: 0.9375rem;
+          font-weight: 800;
+          letter-spacing: -0.01em;
+        }
+
+        .category-section-meta {
+          display: block;
+          color: var(--text-muted);
+          font-size: 0.75rem;
+          font-weight: 600;
+          margin-top: 0.2rem;
+        }
+
+        .category-section-actions {
+          display: flex;
+          align-items: center;
+          gap: 0.625rem;
+          flex-shrink: 0;
+        }
+
+        .category-chevron {
+          color: var(--text-muted);
+          transition: transform 160ms var(--ease-out);
+        }
+
+        .category-chevron.collapsed {
+          transform: rotate(-90deg);
+        }
+
+        .category-section-body {
+          border-top: 1px solid var(--border);
+          display: flex;
+          flex-direction: column;
+          gap: 0.85rem;
+          overflow: hidden;
+          padding: 1rem;
+        }
+
+        .category-section-body.visible {
+          overflow: visible;
+        }
+
+        :global(.category-row) {
+          align-items: center;
+          border: 1px solid var(--border);
+          border-radius: 14px;
+          display: flex;
+          justify-content: space-between;
+          gap: 1rem;
+          min-height: 68px;
+          padding: 0.9rem 1rem;
+          transition: background 150ms var(--ease-out), border-color 150ms var(--ease-out);
+        }
+
+        :global(.category-row.parent) {
+          background: color-mix(in oklch, var(--surface) 86%, var(--accent-muted));
+          border-color: var(--border-strong);
+        }
+
+        :global(.category-row.child),
+        :global(.category-row.orphan) {
+          background: color-mix(in oklch, var(--surface) 42%, transparent);
+        }
+
+        :global(.category-row:hover) {
+          background: var(--surface-hover);
+          border-color: var(--border-strong);
+        }
+
+        :global(.category-row .item-info) {
+          min-width: 0;
+        }
+
+        :global(.category-row .item-name) {
+          display: block;
+          line-height: 1.35;
+        }
+
+        :global(.category-row .item-meta) {
+          line-height: 1.45;
+        }
+
+        :global(.category-row .item-right) {
+          flex-shrink: 0;
+        }
+
+        .subcategory-list {
+          display: flex;
+          flex-direction: column;
+          gap: 0.65rem;
+          padding-left: 1.2rem;
+          position: relative;
+        }
+
+        .subcategory-list::before {
+          content: "";
+          position: absolute;
+          bottom: 0.5rem;
+          left: 0.35rem;
+          top: 0.5rem;
+          width: 1px;
+          background: var(--border);
+        }
+
+        :global(.subcategory-list .category-row.child) {
+          position: relative;
+        }
+
+        :global(.subcategory-list .category-row.child::before) {
+          content: "";
+          position: absolute;
+          left: -0.85rem;
+          top: 50%;
+          width: 0.7rem;
+          height: 1px;
+          background: var(--border);
+        }
+
+        .subcategory-empty {
+          border: 1px dashed var(--border);
+          border-radius: 12px;
+          color: var(--text-subtle);
+          font-size: 0.75rem;
+          font-weight: 600;
+          margin: 0;
+          padding: 0.85rem;
+        }
+
         .btn-spinner {
           width: 16px; height: 16px;
           border: 2px solid oklch(1 0 0 / 0.3); border-top-color: white;
           border-radius: 50%; animation: spin 600ms linear infinite;
         }
         @keyframes spin { to { transform: rotate(360deg); } }
-        @media (max-width: 600px) { .form-grid { grid-template-columns: 1fr; } }
+        @media (max-width: 900px) {
+          .category-sections { grid-template-columns: 1fr; }
+        }
+
+        @media (max-width: 600px) {
+          .form-grid { grid-template-columns: 1fr; }
+          :global(.category-row) { align-items: flex-start; flex-direction: column; }
+          :global(.category-row .item-right) { width: 100%; justify-content: flex-end; }
+        }
       `}</style>
     </div>
   );
