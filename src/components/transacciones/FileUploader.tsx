@@ -11,6 +11,55 @@ interface FileUploaderProps {
   currentUrl: string | null;
 }
 
+const convertToWebP = (file: File, maxDimension = 1600, quality = 0.8): Promise<File> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = (event) => {
+      const img = new Image();
+      img.src = event.target?.result as string;
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        let width = img.width;
+        let height = img.height;
+
+        if (width > height) {
+          if (width > maxDimension) {
+            height = Math.round((height * maxDimension) / width);
+            width = maxDimension;
+          }
+        } else {
+          if (height > maxDimension) {
+            width = Math.round((width * maxDimension) / height);
+            height = maxDimension;
+          }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        ctx?.drawImage(img, 0, 0, width, height);
+
+        canvas.toBlob(
+          (blob) => {
+            if (blob) {
+              const baseName = file.name.replace(/\.[^/.]+$/, "") || "comprobante";
+              resolve(new File([blob], `${baseName}.webp`, { type: "image/webp" }));
+              return;
+            }
+
+            reject(new Error("Error al convertir a WebP"));
+          },
+          "image/webp",
+          quality
+        );
+      };
+      img.onerror = () => reject(new Error("Error al cargar la imagen"));
+    };
+    reader.onerror = () => reject(new Error("Error al leer el archivo"));
+  });
+};
+
 export function FileUploader({ centroId, onUpload, currentUrl }: FileUploaderProps) {
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState("");
@@ -30,15 +79,36 @@ export function FileUploader({ centroId, onUpload, currentUrl }: FileUploaderPro
       setUploading(true);
       setError("");
 
-      const ext = file.name.split(".").pop();
+      let fileToUpload: File = file;
+      let ext = file.name.split(".").pop() || "";
+
+      if (file.type.startsWith("image/")) {
+        try {
+          fileToUpload = await convertToWebP(file);
+          ext = "webp";
+        } catch {
+          setError("Error al comprimir la imagen. Inténtalo de nuevo.");
+          setUploading(false);
+          return;
+        }
+      }
+
       const fileName = `${centroId}/${Date.now()}.${ext}`;
 
       const { data, error: uploadError } = await supabase.storage
         .from("comprobantes")
-        .upload(fileName, file, { upsert: false });
+        .upload(fileName, fileToUpload, { 
+          upsert: false,
+          contentType: fileToUpload.type,
+        });
 
       if (uploadError) {
-        setError("Error al subir el archivo. Inténtalo de nuevo.");
+        console.error("Error de subida a Supabase:", uploadError);
+        setError(
+          uploadError.message.includes("row-level security")
+            ? "Supabase bloqueó la subida por una política de Storage. Revisa que el bucket permita archivos .webp para este centro."
+            : `Error al subir el archivo: ${uploadError.message}`
+        );
         setUploading(false);
         return;
       }

@@ -5,10 +5,12 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Building2, Plus, Trash2, Users, Tag, Folder, Sun, Moon, Monitor, Check, ShieldAlert, Calendar, Pencil } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { createClient } from "@/lib/supabase/client";
 import { useCentro } from "@/context/CentroContext";
 import { useTheme } from "@/context/ThemeContext";
+import { Pagination, usePagination } from "@/components/shared/Pagination";
 import {
   centroSchema, servicioSchema, categoriaSchema, terapeutaSchema,
   type CentroFormData, type ServicioFormData, type CategoriaFormData, type TerapeutaFormData
@@ -16,8 +18,10 @@ import {
 import type { Servicio, Categoria, Terapeuta } from "@/types/database";
 
 type Tab = "centro" | "servicios" | "categorias" | "terapeutas" | "apariencia";
+type ServicioConCategoria = Servicio & { categorias?: Pick<Categoria, "id" | "nombre"> | null };
+type CategoriaConParent = Categoria & { parent?: Pick<Categoria, "id" | "nombre"> | null };
 
-const TABS: { id: Tab; label: string; icon: any }[] = [
+const TABS: { id: Tab; label: string; icon: LucideIcon }[] = [
   { id: "centro", label: "Datos del centro", icon: Building2 },
   { id: "servicios", label: "Servicios y planes", icon: Tag },
   { id: "categorias", label: "Categorías", icon: Folder },
@@ -91,9 +95,15 @@ export default function ConfiguracionPage() {
         .eq("centro_id", centroId)
         .is("deleted_at", null)
         .order("nombre");
-      return (data ?? []) as any[];
+      return (data ?? []) as unknown as ServicioConCategoria[];
     },
     enabled: !!centroId,
+  });
+
+  const serviciosPagination = usePagination({
+    items: servicios,
+    storageKey: "pagination:configuracion-servicios",
+    resetKey: `${centroId ?? ""}:${activeTab}`,
   });
 
   const servicioForm = useForm<ServicioFormData>({
@@ -166,9 +176,15 @@ export default function ConfiguracionPage() {
         .is("deleted_at", null)
         .order("tipo")
         .order("nombre");
-      return (data ?? []) as any[];
+      return (data ?? []) as unknown as CategoriaConParent[];
     },
     enabled: !!centroId,
+  });
+
+  const categoriasPagination = usePagination({
+    items: categorias,
+    storageKey: "pagination:configuracion-categorias",
+    resetKey: `${centroId ?? ""}:${activeTab}`,
   });
 
   const [showCategoriaForm, setShowCategoriaForm] = useState(false);
@@ -249,6 +265,12 @@ export default function ConfiguracionPage() {
       return (data ?? []) as Terapeuta[];
     },
     enabled: !!centroId,
+  });
+
+  const terapeutasPagination = usePagination({
+    items: terapeutas,
+    storageKey: "pagination:configuracion-terapeutas",
+    resetKey: `${centroId ?? ""}:${activeTab}`,
   });
 
   const terapeutaForm = useForm<TerapeutaFormData>({
@@ -602,7 +624,7 @@ export default function ConfiguracionPage() {
             {servicios.length === 0 ? (
               <p className="items-empty text-center p-8 text-sm text-[var(--text-subtle)] font-medium">No hay servicios configurados</p>
             ) : (
-              servicios.map((s) => (
+              serviciosPagination.paginatedItems.map((s) => (
                 <div key={s.id} className="item-row flex items-center justify-between p-3 border border-[var(--border)] rounded-xl bg-[var(--bg-subtle)] hover:bg-[var(--surface-hover)] transition-all">
                   <div className="item-info">
                     <span className="item-name text-sm font-semibold text-[var(--text)]">{s.nombre}</span>
@@ -645,6 +667,15 @@ export default function ConfiguracionPage() {
               ))
             )}
           </div>
+          <Pagination
+            totalItems={servicios.length}
+            page={serviciosPagination.page}
+            pageSize={serviciosPagination.pageSize}
+            totalPages={serviciosPagination.totalPages}
+            itemLabel="servicios"
+            onPageChange={serviciosPagination.setPage}
+            onPageSizeChange={serviciosPagination.setPageSize}
+          />
         </motion.div>
       )}
 
@@ -735,7 +766,7 @@ export default function ConfiguracionPage() {
             {categorias.length === 0 ? (
               <p className="items-empty text-center p-8 text-sm text-[var(--text-subtle)] font-medium">No hay categorías configuradas</p>
             ) : (
-              categorias.map((c) => (
+              categoriasPagination.paginatedItems.map((c) => (
                 <div key={c.id} className="item-row flex items-center justify-between p-3 border border-[var(--border)] rounded-xl bg-[var(--bg-subtle)] hover:bg-[var(--surface-hover)] transition-all">
                   <div className="item-info">
                     <span className="item-name text-sm font-semibold text-[var(--text)]">{c.nombre}</span>
@@ -779,6 +810,15 @@ export default function ConfiguracionPage() {
               ))
             )}
           </div>
+          <Pagination
+            totalItems={categorias.length}
+            page={categoriasPagination.page}
+            pageSize={categoriasPagination.pageSize}
+            totalPages={categoriasPagination.totalPages}
+            itemLabel="categorías"
+            onPageChange={categoriasPagination.setPage}
+            onPageSizeChange={categoriasPagination.setPageSize}
+          />
         </motion.div>
       )}
 
@@ -861,7 +901,7 @@ export default function ConfiguracionPage() {
             {terapeutas.length === 0 ? (
               <p className="items-empty text-center p-8 text-sm text-[var(--text-subtle)] font-medium">No hay terapeutas registrados</p>
             ) : (
-              terapeutas.map((t) => (
+              terapeutasPagination.paginatedItems.map((t) => (
                 <div key={t.id} className="item-row flex items-center justify-between p-3 border border-[var(--border)] rounded-xl bg-[var(--bg-subtle)] hover:bg-[var(--surface-hover)] transition-all">
                   <div className="flex items-center gap-3">
                     <div className="ter-avatar w-10 h-10 rounded-full font-bold flex items-center justify-center text-sm bg-[var(--accent-muted)] text-[var(--accent)] border border-[var(--border)]">
@@ -907,6 +947,15 @@ export default function ConfiguracionPage() {
               ))
             )}
           </div>
+          <Pagination
+            totalItems={terapeutas.length}
+            page={terapeutasPagination.page}
+            pageSize={terapeutasPagination.pageSize}
+            totalPages={terapeutasPagination.totalPages}
+            itemLabel="terapeutas"
+            onPageChange={terapeutasPagination.setPage}
+            onPageSizeChange={terapeutasPagination.setPageSize}
+          />
         </motion.div>
       )}
 

@@ -14,7 +14,12 @@ import { transaccionSchema, type TransaccionFormData } from "@/types/forms";
 import { formatHNL } from "@/utils/currency";
 import { formatFechaCorta } from "@/utils/dates";
 import { FileUploader } from "@/components/transacciones/FileUploader";
+import { Pagination, usePagination } from "@/components/shared/Pagination";
 import type { TransaccionConRelaciones, Servicio, Categoria, Paciente } from "@/types/database";
+
+type CategoriaConParent = Categoria & {
+  parent?: Pick<Categoria, "id" | "nombre"> | null;
+};
 
 function TransaccionesContent() {
   const { centroActivo } = useCentro();
@@ -86,7 +91,6 @@ function TransaccionesContent() {
 
   const tipoSeleccionado = watch("tipo");
   const servicioSeleccionadoId = watch("servicio_id");
-  const categoriaSeleccionadaId = watch("categoria_id");
 
   // Queries
   const { data: transacciones = [], isLoading } = useQuery({
@@ -99,13 +103,18 @@ function TransaccionesContent() {
         .eq("centro_id", centroId)
         .is("deleted_at", null)
         .order("fecha", { ascending: false })
-        .order("created_at", { ascending: false })
-        .limit(100);
+        .order("created_at", { ascending: false });
       if (filtroTipo !== "todos") q = q.eq("tipo", filtroTipo);
       const { data } = await q;
       return (data ?? []) as unknown as TransaccionConRelaciones[];
     },
     enabled: !!centroId,
+  });
+
+  const transaccionesPagination = usePagination({
+    items: transacciones,
+    storageKey: "pagination:transacciones",
+    resetKey: `${centroId ?? ""}:${filtroTipo}`,
   });
 
   const { data: categorias = [] } = useQuery({
@@ -119,7 +128,7 @@ function TransaccionesContent() {
         .eq("activo", true)
         .is("deleted_at", null)
         .order("nombre");
-      return (data ?? []) as any[];
+      return (data ?? []) as unknown as CategoriaConParent[];
     },
     enabled: !!centroId,
   });
@@ -737,7 +746,7 @@ function TransaccionesContent() {
                   </tr>
                 </thead>
                 <tbody>
-                  {transacciones.map((t, i) => (
+                  {transaccionesPagination.paginatedItems.map((t, i) => (
                     <motion.tr
                       key={t.id}
                       initial={{ opacity: 0, x: -8 }}
@@ -770,7 +779,7 @@ function TransaccionesContent() {
                       </td>
                       <td>
                         <span className="text-sm font-medium">
-                          {(t as any).pacientes?.nombre_completo ?? "—"}
+                          {t.pacientes?.nombre_completo ?? "—"}
                         </span>
                       </td>
                       <td style={{ textAlign: "right" }}>
@@ -836,17 +845,15 @@ function TransaccionesContent() {
             </div>
           )}
         </div>
-        {/* Directory Pagination Footer */}
-        <div className="directory-footer flex items-center justify-between border-t border-[var(--border)] pt-4 mt-4 pl-4 pb-2 text-xs font-semibold text-[var(--text-muted)] flex-wrap gap-2">
-          <div>
-            Mostrando 1-{transacciones.length} de {transacciones.length} transacciones
-          </div>
-          <div className="pagination flex items-center gap-1 pr-2 pb-2">
-            <button className="btn-page disabled px-2 py-1 rounded border border-[var(--border)]">&lt;</button>
-            <button className="btn-page active px-2 py-1 rounded bg-[var(--accent)] text-[var(--accent-fg)]">1</button>
-            <button className="btn-page disabled px-2 py-1 rounded border border-[var(--border)]">&gt;</button>
-          </div>
-        </div>
+        <Pagination
+          totalItems={transacciones.length}
+          page={transaccionesPagination.page}
+          pageSize={transaccionesPagination.pageSize}
+          totalPages={transaccionesPagination.totalPages}
+          itemLabel="transacciones"
+          onPageChange={transaccionesPagination.setPage}
+          onPageSizeChange={transaccionesPagination.setPageSize}
+        />
       </div>
 
       <style jsx>{`
@@ -963,28 +970,6 @@ function TransaccionesContent() {
           border-color: var(--red);
         }
 
-        .btn-page {
-          min-width: 28px;
-          height: 28px;
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          font-weight: 700;
-          font-size: 0.6875rem;
-          font-family: var(--font-mono);
-          cursor: pointer;
-          transition: all 150ms;
-        }
-
-        .btn-page.disabled {
-          opacity: 0.4;
-          cursor: not-allowed;
-        }
-
-        .btn-page:not(.disabled, .active):hover {
-          background: var(--surface-hover);
-          border-color: var(--border-strong);
-        }
       `}</style>
     </div>
   );

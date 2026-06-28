@@ -15,6 +15,7 @@ import { pacienteSchema, type PacienteFormData } from "@/types/forms";
 import { formatFechaCorta, formatFechaInput } from "@/utils/dates";
 import type { PacienteConPlan, Servicio } from "@/types/database";
 import { KpiCard } from "@/components/dashboard/KpiCard";
+import { Pagination, usePagination } from "@/components/shared/Pagination";
 
 const ESTADO_LABEL: Record<string, string> = {
   activo: "Activo",
@@ -28,6 +29,15 @@ const ESTADO_BADGE: Record<string, string> = {
   cancelado: "badge-muted",
 };
 
+type OrdenPacientes = "nombre_asc" | "nombre_desc" | "ingreso_reciente" | "ingreso_antiguo";
+
+const ORDEN_PACIENTES: { value: OrdenPacientes; label: string }[] = [
+  { value: "nombre_asc", label: "Nombre A-Z" },
+  { value: "nombre_desc", label: "Nombre Z-A" },
+  { value: "ingreso_reciente", label: "Ingreso más reciente" },
+  { value: "ingreso_antiguo", label: "Ingreso más antiguo" },
+];
+
 function toDateInputValue(date: string) {
   return date.split("T")[0] ?? date;
 }
@@ -39,6 +49,8 @@ export default function PacientesPage() {
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [filtroEstado, setFiltroEstado] = useState<"todos" | "activo" | "pausado" | "cancelado">("todos");
+  const [ordenPacientes, setOrdenPacientes] = useState<OrdenPacientes>("nombre_asc");
+  const [showFiltros, setShowFiltros] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
 
@@ -140,11 +152,40 @@ export default function PacientesPage() {
       if (filtroEstado !== "todos") q = q.eq("estado_suscripcion", filtroEstado);
       if (search.length >= 2) q = q.ilike("nombre_completo", `%${search}%`);
 
-      const { data } = await q.limit(100);
+      const { data } = await q;
       return (data ?? []) as unknown as PacienteConPlan[];
     },
     enabled: !!centroId,
   });
+
+  const pacientesOrdenados = [...pacientes].sort((a, b) => {
+    const aDesactivado = a.estado_suscripcion === "cancelado";
+    const bDesactivado = b.estado_suscripcion === "cancelado";
+
+    if (aDesactivado !== bDesactivado) return aDesactivado ? 1 : -1;
+
+    if (ordenPacientes === "nombre_asc" || ordenPacientes === "nombre_desc") {
+      const comparison = a.nombre_completo.localeCompare(b.nombre_completo, "es", {
+        sensitivity: "base",
+      });
+
+      return ordenPacientes === "nombre_asc" ? comparison : -comparison;
+    }
+
+    const aTime = new Date(a.fecha_ingreso).getTime();
+    const bTime = new Date(b.fecha_ingreso).getTime();
+    const comparison = aTime - bTime;
+
+    return ordenPacientes === "ingreso_antiguo" ? comparison : -comparison;
+  });
+
+  const pacientesPagination = usePagination({
+    items: pacientesOrdenados,
+    storageKey: "pagination:pacientes",
+    resetKey: `${centroId ?? ""}:${filtroEstado}:${search}:${ordenPacientes}`,
+  });
+
+  const ordenActual = ORDEN_PACIENTES.find((option) => option.value === ordenPacientes)?.label;
 
   const { data: planes = [] } = useQuery({
     queryKey: ["planes", centroId],
@@ -315,10 +356,42 @@ export default function PacientesPage() {
               </span>
             </div>
             <div className="flex items-center gap-2 flex-wrap">
-              <button className="btn-filter btn-pressable flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[var(--border)] text-xs font-semibold text-[var(--text-muted)]">
-                <Filter size={13} />
-                <span>Filtros</span>
-              </button>
+              <div className="filters-wrap">
+                <button
+                  type="button"
+                  className="btn-filter btn-pressable flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[var(--border)] text-xs font-semibold text-[var(--text-muted)]"
+                  onClick={() => setShowFiltros((current) => !current)}
+                  aria-expanded={showFiltros}
+                  aria-haspopup="menu"
+                >
+                  <Filter size={13} />
+                  <span>Filtros</span>
+                </button>
+                {showFiltros && (
+                  <div className="filters-menu" role="menu" aria-label="Ordenar pacientes">
+                    <span className="filters-title">Ordenar por</span>
+                    {ORDEN_PACIENTES.map((option) => (
+                      <button
+                        key={option.value}
+                        type="button"
+                        role="menuitemradio"
+                        aria-checked={ordenPacientes === option.value}
+                        className={`filters-option ${ordenPacientes === option.value ? "active" : ""}`}
+                        onClick={() => {
+                          setOrdenPacientes(option.value);
+                          setShowFiltros(false);
+                        }}
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                    <span className="filters-note">Los pacientes inactivos se muestran al final.</span>
+                  </div>
+                )}
+              </div>
+              <span className="active-order text-[10px] font-bold uppercase tracking-wider text-[var(--text-subtle)]">
+                {ordenActual}
+              </span>
               <div className="filtro-tabs">
                 {[
                   { value: "todos" as const, label: "Todos" },
@@ -629,7 +702,7 @@ export default function PacientesPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {pacientes.map((p, i) => (
+                  {pacientesPagination.paginatedItems.map((p, i) => (
                     <motion.tr
                       key={p.id}
                       initial={{ opacity: 0, x: -8 }}
@@ -720,17 +793,15 @@ export default function PacientesPage() {
           )}
         </div>
 
-        {/* Directory Pagination Footer */}
-        <div className="directory-footer flex items-center justify-between border-t border-[var(--border)] pt-4 mt-4 pl-4 pb-2 text-xs font-semibold text-[var(--text-muted)] flex-wrap gap-2">
-          <div>
-            Mostrando 1-{pacientes.length} de {pacientes.length} pacientes
-          </div>
-          <div className="pagination flex items-center gap-1 pr-2 pb-2">
-            <button className="btn-page disabled px-2 py-1 rounded border border-[var(--border)]">&lt;</button>
-            <button className="btn-page active px-2 py-1 rounded bg-[var(--accent)] text-[var(--accent-fg)]">1</button>
-            <button className="btn-page disabled px-2 py-1 rounded border border-[var(--border)]">&gt;</button>
-          </div>
-        </div>
+        <Pagination
+          totalItems={pacientes.length}
+          page={pacientesPagination.page}
+          pageSize={pacientesPagination.pageSize}
+          totalPages={pacientesPagination.totalPages}
+          itemLabel="pacientes"
+          onPageChange={pacientesPagination.setPage}
+          onPageSizeChange={pacientesPagination.setPageSize}
+        />
       </div>
 
       <style jsx>{`
@@ -793,6 +864,71 @@ export default function PacientesPage() {
         .directory-header {
           padding: 1.25rem 1.25rem 0;
           border-bottom: none;
+        }
+
+        .filters-wrap {
+          position: relative;
+        }
+
+        .filters-menu {
+          position: absolute;
+          top: calc(100% + 0.5rem);
+          right: 0;
+          z-index: 40;
+          width: 220px;
+          padding: 0.5rem;
+          border: 1px solid var(--border);
+          border-radius: 14px;
+          background: var(--surface);
+          box-shadow: var(--shadow-lg);
+        }
+
+        .filters-title,
+        .filters-note {
+          display: block;
+          padding: 0.35rem 0.5rem;
+          color: var(--text-subtle);
+          font-size: 0.625rem;
+          font-weight: 800;
+          letter-spacing: 0.08em;
+          text-transform: uppercase;
+        }
+
+        .filters-note {
+          margin-top: 0.25rem;
+          border-top: 1px solid var(--border);
+          font-size: 0.5625rem;
+          line-height: 1.35;
+          text-transform: none;
+          letter-spacing: 0.02em;
+        }
+
+        .filters-option {
+          width: 100%;
+          border: 0;
+          border-radius: 9px;
+          background: transparent;
+          color: var(--text-muted);
+          cursor: pointer;
+          padding: 0.55rem 0.625rem;
+          text-align: left;
+          font-family: var(--font-sans);
+          font-size: 0.8125rem;
+          font-weight: 700;
+          transition: background 150ms var(--ease-out), color 150ms;
+        }
+
+        .filters-option:hover,
+        .filters-option.active {
+          background: var(--bg-subtle);
+          color: var(--text);
+        }
+
+        @media (max-width: 600px) {
+          .filters-menu {
+            left: 0;
+            right: auto;
+          }
         }
 
         .filtro-tabs {
@@ -901,29 +1037,6 @@ export default function PacientesPage() {
         }
 
         .req { color: #ef4444; }
-
-        .btn-page {
-          min-width: 28px;
-          height: 28px;
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          font-weight: 700;
-          font-size: 0.6875rem;
-          font-family: var(--font-mono);
-          cursor: pointer;
-          transition: all 150ms;
-        }
-
-        .btn-page.disabled {
-          opacity: 0.4;
-          cursor: not-allowed;
-        }
-
-        .btn-page:not(.disabled, .active):hover {
-          background: var(--surface-hover);
-          border-color: var(--border-strong);
-        }
 
         .btn-spinner {
           width: 16px;

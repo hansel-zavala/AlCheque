@@ -8,7 +8,7 @@ import { useCentro } from "@/context/CentroContext";
 import { KpiCard } from "@/components/dashboard/KpiCard";
 import { ChartDonut } from "@/components/dashboard/ChartDonut";
 import { ChartBar } from "@/components/dashboard/ChartBar";
-import { formatHNL } from "@/utils/currency";
+import { Pagination, usePagination } from "@/components/shared/Pagination";
 import { formatFechaCorta, ultimosMeses } from "@/utils/dates";
 import type { Transaccion, PacienteConPlan } from "@/types/database";
 import { motion } from "framer-motion";
@@ -27,7 +27,7 @@ export default function DashboardPage() {
   const ultimoDiaFecha = new Date(año, mes + 1, 0);
   const ultimoDia = `${mesActual}-${String(ultimoDiaFecha.getDate()).padStart(2, "0")}`;
 
-  const { data: transaccionesMes = [], isLoading } = useQuery({
+  const { data: transaccionesMes = [] } = useQuery({
     queryKey: ["transacciones-mes", centroId, mesActual],
     queryFn: async () => {
       if (!centroId) return [];
@@ -52,11 +52,17 @@ export default function DashboardPage() {
         .eq("centro_id", centroId)
         .eq("estado_mensualidad", true)
         .eq("estado_suscripcion", "activo")
-        .order("nombre_completo")
-        .limit(20);
+        .is("deleted_at", null)
+        .order("nombre_completo");
       return (data ?? []) as unknown as PacienteConPlan[];
     },
     enabled: !!centroId,
+  });
+
+  const pacientesActivosPagination = usePagination({
+    items: pacientesActivos,
+    storageKey: "pagination:dashboard-pacientes-activos",
+    resetKey: centroId ?? "",
   });
 
   const { data: chartData = [] } = useQuery({
@@ -263,7 +269,7 @@ export default function DashboardPage() {
                 </tr>
               </thead>
               <tbody>
-                {pacientesActivos.map((p, i) => (
+                {pacientesActivosPagination.paginatedItems.map((p) => (
                   <tr key={p.id}>
                     <td>
                       <Link href={`/pacientes/${p.id}`} className="patient-link">
@@ -272,7 +278,7 @@ export default function DashboardPage() {
                     </td>
                     <td>
                       <span className="plan-text">
-                        {(p as any).servicios?.nombre ?? "—"}
+                        {p.servicios?.nombre ?? "—"}
                       </span>
                     </td>
                     <td>
@@ -287,6 +293,15 @@ export default function DashboardPage() {
                 ))}
               </tbody>
             </table>
+            <Pagination
+              totalItems={pacientesActivos.length}
+              page={pacientesActivosPagination.page}
+              pageSize={pacientesActivosPagination.pageSize}
+              totalPages={pacientesActivosPagination.totalPages}
+              itemLabel="pacientes"
+              onPageChange={pacientesActivosPagination.setPage}
+              onPageSizeChange={pacientesActivosPagination.setPageSize}
+            />
           </div>
         )}
       </motion.div>
