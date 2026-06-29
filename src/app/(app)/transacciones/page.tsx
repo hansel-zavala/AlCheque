@@ -34,6 +34,18 @@ function formatCategoriaLabel(categoria: CategoriaConParent) {
   return categoria.parent_id && categoria.parent ? `${categoria.parent.nombre} > ${categoria.nombre}` : categoria.nombre;
 }
 
+function getPeriodoFromDate(fecha: string) {
+  return fecha ? fecha.slice(0, 7) : new Date().toISOString().slice(0, 7);
+}
+
+function formatPeriodoPago(periodo: string | null) {
+  if (!periodo) return "—";
+  const [year, month] = periodo.split("-");
+  if (!year || !month) return periodo;
+  const date = new Date(Number(year), Number(month) - 1, 1);
+  return new Intl.DateTimeFormat("es-HN", { month: "long", year: "numeric" }).format(date);
+}
+
 function TransaccionesContent() {
   const { centroActivo } = useCentro();
   const supabase = createClient();
@@ -109,11 +121,13 @@ function TransaccionesContent() {
     defaultValues: {
       tipo: "ingreso",
       fecha: new Date().toISOString().split("T")[0],
+      periodo_pago: new Date().toISOString().slice(0, 7),
     },
   });
 
   const tipoSeleccionado = watch("tipo");
   const servicioSeleccionadoId = watch("servicio_id");
+  const fechaSeleccionada = watch("fecha");
 
   // Queries
   const { data: transacciones = [], isLoading } = useQuery({
@@ -217,6 +231,12 @@ function TransaccionesContent() {
     }
   }, [servicioSeleccionadoId, servicios, setValue]);
 
+  useEffect(() => {
+    if (tipoSeleccionado === "ingreso" && fechaSeleccionada) {
+      setValue("periodo_pago", getPeriodoFromDate(fechaSeleccionada), { shouldValidate: true });
+    }
+  }, [fechaSeleccionada, tipoSeleccionado, setValue]);
+
   const createMutation = useMutation({
     mutationFn: async (data: TransaccionFormData) => {
       if (!centroId) throw new Error("Sin centro activo");
@@ -235,6 +255,7 @@ function TransaccionesContent() {
         monto: parseFloat(data.monto),
         metodo_pago: data.metodo_pago,
         fecha: data.fecha,
+        periodo_pago: data.tipo === "ingreso" ? data.periodo_pago || getPeriodoFromDate(data.fecha) : null,
         servicio_id: data.servicio_id || null,
         categoria_id: catId,
         paciente_id: data.paciente_id || null,
@@ -273,6 +294,7 @@ function TransaccionesContent() {
           monto: parseFloat(data.monto),
           metodo_pago: data.metodo_pago,
           fecha: data.fecha,
+          periodo_pago: data.tipo === "ingreso" ? data.periodo_pago || getPeriodoFromDate(data.fecha) : null,
           servicio_id: data.servicio_id || null,
           categoria_id: catId,
           paciente_id: data.paciente_id || null,
@@ -349,7 +371,7 @@ function TransaccionesContent() {
         <div className="flex items-center gap-3 flex-wrap">
           <button
             className="btn-primary btn-pressable flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs tracking-wider uppercase"
-            onClick={() => { setShowForm(true); reset(); }}
+            onClick={() => { setShowForm(true); reset({ tipo: "ingreso", fecha: new Date().toISOString().split("T")[0], periodo_pago: new Date().toISOString().slice(0, 7) }); }}
             id="nueva-transaccion-btn"
           >
             <Plus size={15} strokeWidth={3} />
@@ -482,6 +504,30 @@ function TransaccionesContent() {
                               />
                               {errors.fecha && <p className="form-error">{errors.fecha.message}</p>}
                             </div>
+
+                            <AnimatePresence>
+                              {tipoSeleccionado === "ingreso" && (
+                                <motion.div
+                                  className="form-group"
+                                  initial={{ opacity: 0, y: -8 }}
+                                  animate={{ opacity: 1, y: 0 }}
+                                  exit={{ opacity: 0, y: -8 }}
+                                  transition={{ duration: 0.2 }}
+                                >
+                                  <label className="form-label" htmlFor="periodo_pago">
+                                    Mes pagado
+                                  </label>
+                                  <input
+                                    id="periodo_pago"
+                                    type="month"
+                                    className={`form-input ${errors.periodo_pago ? "error" : ""}`}
+                                    {...register("periodo_pago")}
+                                  />
+                                  <p className="form-hint">Mes al que corresponde este ingreso, aunque se cobre otro día.</p>
+                                  {errors.periodo_pago && <p className="form-error">{errors.periodo_pago.message}</p>}
+                                </motion.div>
+                              )}
+                            </AnimatePresence>
 
                             {/* Método de pago */}
                             <div className="form-group">
@@ -994,6 +1040,7 @@ function TransaccionesContent() {
                     <th>Categoría</th>
                     <th>Detalle</th>
                     <th>Método</th>
+                    <th>Mes pagado</th>
                     <th>Paciente</th>
                     <th style={{ textAlign: "right" }}>Monto</th>
                     <th></th>
@@ -1032,6 +1079,11 @@ function TransaccionesContent() {
                         <span className="badge badge-muted capitalize">{t.metodo_pago}</span>
                       </td>
                       <td>
+                        <span className="text-sm text-[var(--text-muted)] capitalize">
+                          {t.tipo === "ingreso" ? formatPeriodoPago(t.periodo_pago) : "—"}
+                        </span>
+                      </td>
+                      <td>
                         <span className="text-sm font-medium">
                           {t.pacientes?.nombre_completo ?? "—"}
                         </span>
@@ -1065,6 +1117,7 @@ function TransaccionesContent() {
                                 tipo: t.tipo,
                                 monto: t.monto.toString(),
                                 fecha: t.fecha,
+                                periodo_pago: t.periodo_pago || getPeriodoFromDate(t.fecha),
                                 metodo_pago: t.metodo_pago,
                                 servicio_id: t.servicio_id || "",
                                 categoria_id: t.categoria_id || "",

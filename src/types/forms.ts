@@ -48,6 +48,11 @@ export const transaccionSchema = z.object({
     message: "Selecciona el método de pago",
   }),
   fecha: z.string().min(1, "La fecha es requerida"),
+  periodo_pago: z
+    .string()
+    .regex(/^\d{4}-\d{2}$/, "Selecciona un mes válido")
+    .optional()
+    .or(z.literal("")),
   servicio_id: z.string().uuid().optional().or(z.literal("")),
   categoria_id: z.string().uuid().optional().or(z.literal("")),
   paciente_id: z.string().uuid().optional().or(z.literal("")),

@@ -183,6 +183,7 @@ export interface Database {
           metodo_pago: "efectivo" | "transferencia" | "tarjeta";
           detalle: string | null;
           fecha: string;
+          periodo_pago: string | null;
           comprobante_url: string | null;
           servicio_id: string | null;
           categoria_id: string | null;
@@ -199,6 +200,7 @@ export interface Database {
           metodo_pago: "efectivo" | "transferencia" | "tarjeta";
           detalle?: string | null;
           fecha?: string;
+          periodo_pago?: string | null;
           comprobante_url?: string | null;
           servicio_id?: string | null;
           categoria_id?: string | null;
@@ -213,6 +215,7 @@ export interface Database {
           metodo_pago?: "efectivo" | "transferencia" | "tarjeta";
           detalle?: string | null;
           fecha?: string;
+          periodo_pago?: string | null;
           comprobante_url?: string | null;
           servicio_id?: string | null;
           categoria_id?: string | null;

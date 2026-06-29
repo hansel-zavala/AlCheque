@@ -22,6 +22,15 @@ const ESTADO_LABEL: Record<string, string> = {
   cancelado: "Cancelado",
 };
 
+function formatPeriodoPago(periodo: string | null) {
+  if (!periodo) return null;
+  const [year, month] = periodo.split("-").map(Number);
+  if (!year || !month) return periodo;
+  return new Intl.DateTimeFormat("es-HN", { month: "long", year: "numeric" }).format(
+    new Date(year, month - 1, 1)
+  );
+}
+
 export default function PacienteDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const supabase = createClient();
@@ -172,6 +181,11 @@ export default function PacienteDetailPage({ params }: { params: Promise<{ id: s
                     </div>
                     <div className="tl-bottom">
                       <span className="tl-fecha">{formatFechaCorta(pago.fecha)}</span>
+                      {formatPeriodoPago(pago.periodo_pago) && (
+                        <span className="tl-periodo badge badge-muted capitalize">
+                          {formatPeriodoPago(pago.periodo_pago)}
+                        </span>
+                      )}
                       <span className="tl-metodo badge badge-muted">
                         {pago.metodo_pago}
                       </span>

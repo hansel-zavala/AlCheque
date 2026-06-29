@@ -7,6 +7,7 @@ import { usePathname, useRouter } from "next/navigation";
 import {
   LayoutDashboard,
   Users,
+  CircleDollarSign,
   ArrowLeftRight,
   BarChart3,
   Settings,
@@ -26,6 +27,7 @@ import { ThemeToggle } from "./ThemeToggle";
 const navItems = [
   { href: "/dashboard", icon: LayoutDashboard, label: "DASHBOARD" },
   { href: "/pacientes", icon: Users, label: "PACIENTES" },
+  { href: "/ingresos-clinicos", icon: CircleDollarSign, label: "INGRESOS CLÍNICOS" },
   { href: "/transacciones", icon: ArrowLeftRight, label: "TRANSACCIONES" },
   { href: "/reportes", icon: BarChart3, label: "REPORTES" },
   { href: "/configuracion", icon: Settings, label: "CONFIGURACIÓN" },
