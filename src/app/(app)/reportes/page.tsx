@@ -1,12 +1,12 @@
 "use client";
 
 import { useState } from "react";
+import type { CSSProperties } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { BarChart3, Download } from "lucide-react";
+import { ArrowDownRight, ArrowUpRight, BarChart3, Download, Scale } from "lucide-react";
 import { motion } from "framer-motion";
 import { createClient } from "@/lib/supabase/client";
 import { useCentro } from "@/context/CentroContext";
-import { ChartBar } from "@/components/dashboard/ChartBar";
 import { ChartDonut } from "@/components/dashboard/ChartDonut";
 import { formatHNL } from "@/utils/currency";
 import { formatFechaCorta } from "@/utils/dates";
@@ -46,6 +46,7 @@ export default function ReportesPage() {
   const totalIngresos = ingresos.reduce((s, t) => s + t.monto, 0);
   const totalEgresos = egresos.reduce((s, t) => s + t.monto, 0);
   const balance = totalIngresos - totalEgresos;
+  const kpiMaxValue = Math.max(totalIngresos, totalEgresos, Math.abs(balance), 1);
 
   // Desglose por método de pago (ingresos)
   const metodoPago = [
@@ -94,7 +95,7 @@ export default function ReportesPage() {
       t.servicios?.nombre ?? t.categorias?.nombre ?? "",
       t.detalle ?? "",
       t.metodo_pago,
-      (t as any).pacientes?.nombre_completo ?? "",
+      t.pacientes?.nombre_completo ?? "",
       t.monto.toFixed(2),
     ]);
 
@@ -217,27 +218,59 @@ export default function ReportesPage() {
       {/* KPIs */}
       <div className="kpi-row grid grid-cols-1 md:grid-cols-3 gap-4">
         {[
-          { label: "Ingresos", value: totalIngresos, color: "var(--accent)" },
-          { label: "Egresos", value: totalEgresos, color: "var(--red)" },
-          { label: "Balance neto", value: balance, color: balance >= 0 ? "var(--accent)" : "var(--red)" },
+          {
+            label: "Ingresos",
+            value: totalIngresos,
+            color: "var(--accent)",
+            tone: "green",
+            icon: ArrowUpRight,
+            count: ingresos.length,
+            helper: "Entradas registradas",
+          },
+          {
+            label: "Egresos",
+            value: totalEgresos,
+            color: "var(--red)",
+            tone: "red",
+            icon: ArrowDownRight,
+            count: egresos.length,
+            helper: "Salidas registradas",
+          },
+          {
+            label: "Balance neto",
+            value: balance,
+            color: balance >= 0 ? "var(--accent)" : "var(--red)",
+            tone: balance >= 0 ? "green" : "red",
+            icon: Scale,
+            count: transacciones.length,
+            helper: balance >= 0 ? "Resultado positivo" : "Resultado por cubrir",
+          },
         ].map((k, i) => (
           <motion.div
             key={k.label}
-            className="kpi-mini"
-            style={{ "--card-accent-color": k.color } as any}
+            className={`kpi-mini kpi-mini-${k.tone}`}
+            style={{
+              "--card-accent-color": k.color,
+              "--kpi-fill": `${Math.max(8, Math.round((Math.abs(k.value) / kpiMaxValue) * 100))}%`,
+            } as CSSProperties}
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: i * 0.06 }}
           >
-            <span className="kpi-mini-label">{k.label}</span>
+            <div className="kpi-mini-head">
+              <span className="kpi-mini-label">{k.label}</span>
+              <span className="kpi-mini-icon" aria-hidden="true">
+                <k.icon size={18} strokeWidth={2.3} />
+              </span>
+            </div>
             <span className="kpi-mini-value" style={{ color: k.color }}>
               {formatHNL(k.value)}
             </span>
-            <span className="kpi-mini-sub">{transacciones.filter((t) =>
-              k.label === "Balance neto"
-                ? true
-                : t.tipo === (k.label === "Ingresos" ? "ingreso" : "egreso")
-            ).length} transacciones</span>
+            <div className="kpi-mini-foot">
+              <span>{k.count} transacciones</span>
+              <span>{k.helper}</span>
+            </div>
+            <span className="kpi-mini-meter" aria-hidden="true" />
           </motion.div>
         ))}
       </div>
@@ -308,7 +341,7 @@ export default function ReportesPage() {
                     <td><span className="text-sm font-medium">{t.servicios?.nombre ?? t.categorias?.nombre ?? "—"}</span></td>
                     <td><span className="text-sm text-[var(--text-muted)]">{t.detalle ?? "—"}</span></td>
                     <td><span className="badge badge-muted capitalize">{t.metodo_pago}</span></td>
-                    <td><span className="text-sm font-medium">{(t as any).pacientes?.nombre_completo ?? "—"}</span></td>
+                    <td><span className="text-sm font-medium">{t.pacientes?.nombre_completo ?? "—"}</span></td>
                     <td style={{ textAlign: "right" }}>
                       <span className="mono font-bold text-sm" style={{ color: t.tipo === "ingreso" ? "var(--accent)" : "var(--red)" }}>
                         {t.tipo === "ingreso" ? "+" : "-"}{formatHNL(t.monto)}
@@ -360,38 +393,121 @@ export default function ReportesPage() {
         }
         .quick-btn:hover { background: var(--accent-muted); color: var(--accent); border-color: var(--accent); }
 
-        .kpi-mini {
-          background: rgba(23, 31, 51, 0.45);
+        :global(.kpi-mini) {
+          background:
+            radial-gradient(circle at top right, color-mix(in srgb, var(--card-accent-color) 18%, transparent), transparent 48%),
+            linear-gradient(145deg, rgba(23, 31, 51, 0.92), rgba(13, 21, 39, 0.72));
           backdrop-filter: blur(20px);
-          border: 1px solid rgba(255, 255, 255, 0.08);
-          box-shadow: var(--shadow-md);
-          border-radius: 16px;
-          padding: 1.25rem;
+          border: 1px solid color-mix(in srgb, var(--card-accent-color) 28%, rgba(255, 255, 255, 0.08));
+          box-shadow: 0 18px 45px rgba(0, 0, 0, 0.24), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+          border-radius: 22px;
+          padding: 1.15rem;
           display: flex;
           flex-direction: column;
-          gap: 0.25rem;
+          gap: 0.85rem;
           position: relative;
           overflow: hidden;
+          min-height: 156px;
         }
-        [data-theme="light"] .kpi-mini {
-          background: rgba(255, 255, 255, 0.75);
-          border: 1px solid rgba(0, 0, 0, 0.06);
+        :global([data-theme="light"] .kpi-mini) {
+          background:
+            radial-gradient(circle at top right, color-mix(in srgb, var(--card-accent-color) 12%, transparent), transparent 48%),
+            linear-gradient(145deg, rgba(255, 255, 255, 0.95), rgba(246, 250, 247, 0.84));
+          border: 1px solid color-mix(in srgb, var(--card-accent-color) 20%, rgba(0, 0, 0, 0.07));
+          box-shadow: 0 16px 36px rgba(15, 28, 19, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.8);
         }
 
-        .kpi-mini::before {
+        :global(.kpi-mini)::before {
           content: "";
           position: absolute;
-          top: 0;
-          left: 0;
-          right: 0;
-          height: 3px;
-          background: var(--card-accent-color, var(--accent));
-          opacity: 0.8;
+          inset: 0;
+          pointer-events: none;
+          background: linear-gradient(135deg, rgba(255,255,255,0.12), transparent 38%);
+          opacity: 0.55;
         }
 
-        .kpi-mini-label { font-size: 0.8125rem; color: var(--text-muted); font-weight: 600; }
-        .kpi-mini-value { font-size: 1.625rem; font-weight: 750; letter-spacing: -0.02em; font-family: var(--font-mono); }
-        .kpi-mini-sub { font-size: 0.75rem; color: var(--text-subtle); }
+        :global(.kpi-mini)::after {
+          content: "";
+          position: absolute;
+          left: 1.15rem;
+          right: 1.15rem;
+          bottom: 1rem;
+          height: 4px;
+          border-radius: 99px;
+          background: rgba(255, 255, 255, 0.08);
+        }
+
+        :global(.kpi-mini-head),
+        :global(.kpi-mini-foot),
+        :global(.kpi-mini-value),
+        :global(.kpi-mini-meter) {
+          position: relative;
+          z-index: 1;
+        }
+
+        :global(.kpi-mini-head) {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 0.75rem;
+        }
+
+        :global(.kpi-mini-label) {
+          font-size: 0.72rem;
+          color: var(--text-muted);
+          font-family: var(--font-mono);
+          font-weight: 800;
+          letter-spacing: 0.08em;
+          text-transform: uppercase;
+        }
+
+        :global(.kpi-mini-icon) {
+          width: 2.25rem;
+          height: 2.25rem;
+          display: grid;
+          place-items: center;
+          border-radius: 14px;
+          color: var(--card-accent-color);
+          background: color-mix(in srgb, var(--card-accent-color) 14%, transparent);
+          border: 1px solid color-mix(in srgb, var(--card-accent-color) 22%, transparent);
+        }
+
+        :global(.kpi-mini-value) {
+          font-size: clamp(1.55rem, 2.4vw, 2.15rem);
+          font-weight: 800;
+          letter-spacing: -0.055em;
+          line-height: 1;
+          font-family: var(--font-mono);
+          text-shadow: 0 0 18px color-mix(in srgb, var(--card-accent-color) 18%, transparent);
+        }
+
+        :global(.kpi-mini-foot) {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 0.75rem;
+          margin-top: auto;
+          padding-bottom: 0.9rem;
+          font-size: 0.72rem;
+          color: var(--text-subtle);
+        }
+
+        :global(.kpi-mini-foot) span:first-child {
+          color: var(--text-muted);
+          font-weight: 700;
+        }
+
+        :global(.kpi-mini-meter) {
+          position: absolute;
+          left: 1.15rem;
+          bottom: 1rem;
+          width: var(--kpi-fill);
+          max-width: calc(100% - 2.3rem);
+          height: 4px;
+          background: var(--card-accent-color, var(--accent));
+          border-radius: 99px;
+          box-shadow: 0 0 18px color-mix(in srgb, var(--card-accent-color) 45%, transparent);
+        }
         .charts-row { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
         
         .table-card { padding: 0; overflow: hidden; }
@@ -407,6 +523,10 @@ export default function ReportesPage() {
         .empty { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.75rem; padding: 4rem 2rem; color: var(--text-muted); font-size: 0.875rem; }
         .mono { font-family: var(--font-mono); }
         @media (max-width: 900px) { .charts-row { grid-template-columns: 1fr; } }
+        @media (max-width: 640px) {
+          :global(.kpi-mini) { min-height: 148px; }
+          :global(.kpi-mini-foot) { align-items: flex-start; flex-direction: column; gap: 0.25rem; }
+        }
       `}</style>
     </div>
   );
