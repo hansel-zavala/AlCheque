@@ -53,6 +53,7 @@ export const transaccionSchema = z.object({
     .regex(/^\d{4}-\d{2}$/, "Selecciona un mes válido")
     .optional()
     .or(z.literal("")),
+  es_mensualidad: z.boolean().optional(),
   servicio_id: z.string().uuid().optional().or(z.literal("")),
   categoria_id: z.string().uuid().optional().or(z.literal("")),
   paciente_id: z.string().uuid().optional().or(z.literal("")),

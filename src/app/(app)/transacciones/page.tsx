@@ -23,6 +23,8 @@ type CategoriaConParent = Categoria & {
 
 type FiltroMetodoPago = "todos" | "efectivo" | "transferencia" | "tarjeta";
 
+type PacienteSelect = Pick<Paciente, "id" | "nombre_completo" | "plan_id">;
+
 const METODOS_PAGO: { value: FiltroMetodoPago; label: string }[] = [
   { value: "todos", label: "Todos" },
   { value: "efectivo", label: "Efectivo" },
@@ -121,13 +123,16 @@ function TransaccionesContent() {
     defaultValues: {
       tipo: "ingreso",
       fecha: new Date().toISOString().split("T")[0],
-      periodo_pago: new Date().toISOString().slice(0, 7),
+      periodo_pago: "",
+      es_mensualidad: false,
     },
   });
 
   const tipoSeleccionado = watch("tipo");
   const servicioSeleccionadoId = watch("servicio_id");
+  const pacienteSeleccionadoId = watch("paciente_id");
   const fechaSeleccionada = watch("fecha");
+  const esMensualidadManual = watch("es_mensualidad") ?? false;
 
   // Queries
   const { data: transacciones = [], isLoading } = useQuery({
@@ -206,12 +211,12 @@ function TransaccionesContent() {
       if (!centroId) return [];
       const { data } = await supabase
         .from("pacientes")
-        .select("id, nombre_completo")
+        .select("id, nombre_completo, plan_id")
         .eq("centro_id", centroId)
         .eq("estado_suscripcion", "activo")
         .is("deleted_at", null)
         .order("nombre_completo");
-      return (data ?? []) as Pick<Paciente, "id" | "nombre_completo">[];
+      return (data ?? []) as PacienteSelect[];
     },
     enabled: !!centroId,
   });
@@ -232,10 +237,27 @@ function TransaccionesContent() {
   }, [servicioSeleccionadoId, servicios, setValue]);
 
   useEffect(() => {
-    if (tipoSeleccionado === "ingreso" && fechaSeleccionada) {
+    const pacienteSeleccionadoForm = pacientes.find((p) => p.id === pacienteSeleccionadoId);
+    const esMensualidadAutomatica = Boolean(
+      tipoSeleccionado === "ingreso" &&
+      pacienteSeleccionadoForm?.plan_id &&
+      servicioSeleccionadoId &&
+      pacienteSeleccionadoForm.plan_id === servicioSeleccionadoId
+    );
+    const mostrarPeriodoPago = esMensualidadAutomatica || esMensualidadManual;
+
+    if (mostrarPeriodoPago && fechaSeleccionada) {
       setValue("periodo_pago", getPeriodoFromDate(fechaSeleccionada), { shouldValidate: true });
+    } else {
+      setValue("periodo_pago", "", { shouldValidate: true });
     }
-  }, [fechaSeleccionada, tipoSeleccionado, setValue]);
+  }, [esMensualidadManual, fechaSeleccionada, pacienteSeleccionadoId, pacientes, servicioSeleccionadoId, tipoSeleccionado, setValue]);
+
+  const isPagoMensualidad = (data: TransaccionFormData) => {
+    if (data.tipo !== "ingreso" || !data.paciente_id || !data.servicio_id) return false;
+    const paciente = pacientes.find((p) => p.id === data.paciente_id);
+    return Boolean(paciente?.plan_id === data.servicio_id || data.es_mensualidad);
+  };
 
   const createMutation = useMutation({
     mutationFn: async (data: TransaccionFormData) => {
@@ -255,7 +277,7 @@ function TransaccionesContent() {
         monto: parseFloat(data.monto),
         metodo_pago: data.metodo_pago,
         fecha: data.fecha,
-        periodo_pago: data.tipo === "ingreso" ? data.periodo_pago || getPeriodoFromDate(data.fecha) : null,
+        periodo_pago: isPagoMensualidad(data) ? data.periodo_pago || getPeriodoFromDate(data.fecha) : null,
         servicio_id: data.servicio_id || null,
         categoria_id: catId,
         paciente_id: data.paciente_id || null,
@@ -294,7 +316,7 @@ function TransaccionesContent() {
           monto: parseFloat(data.monto),
           metodo_pago: data.metodo_pago,
           fecha: data.fecha,
-          periodo_pago: data.tipo === "ingreso" ? data.periodo_pago || getPeriodoFromDate(data.fecha) : null,
+          periodo_pago: isPagoMensualidad(data) ? data.periodo_pago || getPeriodoFromDate(data.fecha) : null,
           servicio_id: data.servicio_id || null,
           categoria_id: catId,
           paciente_id: data.paciente_id || null,
@@ -347,6 +369,15 @@ function TransaccionesContent() {
   const categoriasEgresoFiltro = categoriasParaFiltro.filter((c) => c.tipo === "egreso");
   const categoriaSeleccionada = categorias.find((c) => c.id === filtroCategoriaId);
   const pacienteSeleccionado = pacientes.find((p) => p.id === filtroPacienteId);
+  const pacienteSeleccionadoForm = pacientes.find((p) => p.id === pacienteSeleccionadoId);
+  const esMensualidadAutomatica = Boolean(
+    tipoSeleccionado === "ingreso" &&
+    pacienteSeleccionadoForm?.plan_id &&
+    servicioSeleccionadoId &&
+    pacienteSeleccionadoForm.plan_id === servicioSeleccionadoId
+  );
+  const puedeMarcarMensualidad = tipoSeleccionado === "ingreso" && Boolean(pacienteSeleccionadoId && servicioSeleccionadoId);
+  const mostrarPeriodoPago = esMensualidadAutomatica || esMensualidadManual;
   const filtrosActivos = [
     filtroMetodoPago !== "todos",
     filtroCategoriaId !== "todos",
@@ -371,7 +402,7 @@ function TransaccionesContent() {
         <div className="flex items-center gap-3 flex-wrap">
           <button
             className="btn-primary btn-pressable flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs tracking-wider uppercase"
-            onClick={() => { setShowForm(true); reset({ tipo: "ingreso", fecha: new Date().toISOString().split("T")[0], periodo_pago: new Date().toISOString().slice(0, 7) }); }}
+            onClick={() => { setShowForm(true); reset({ tipo: "ingreso", fecha: new Date().toISOString().split("T")[0], periodo_pago: "", es_mensualidad: false }); }}
             id="nueva-transaccion-btn"
           >
             <Plus size={15} strokeWidth={3} />
@@ -506,7 +537,38 @@ function TransaccionesContent() {
                             </div>
 
                             <AnimatePresence>
-                              {tipoSeleccionado === "ingreso" && (
+                              {puedeMarcarMensualidad && (
+                                <motion.div
+                                  className="form-group span-full"
+                                  initial={{ opacity: 0, y: -8 }}
+                                  animate={{ opacity: 1, y: 0 }}
+                                  exit={{ opacity: 0, y: -8 }}
+                                  transition={{ duration: 0.2 }}
+                                >
+                                  <label className="flex items-start gap-3 rounded-2xl border border-[var(--border)] bg-[var(--bg-subtle)] px-4 py-3 cursor-pointer">
+                                    <input
+                                      type="checkbox"
+                                      className="mt-1"
+                                      disabled={esMensualidadAutomatica}
+                                      {...register("es_mensualidad")}
+                                    />
+                                    <span>
+                                      <span className="block text-sm font-bold text-[var(--text)]">
+                                        {esMensualidadAutomatica ? "Detectado como pago de mensualidad" : "Marcar como pago de mensualidad"}
+                                      </span>
+                                      <span className="block text-xs text-[var(--text-muted)] mt-1">
+                                        {esMensualidadAutomatica
+                                          ? "El servicio seleccionado coincide con el plan activo del paciente."
+                                          : "Actívalo solo si este ingreso cubre la mensualidad de un mes."}
+                                      </span>
+                                    </span>
+                                  </label>
+                                </motion.div>
+                              )}
+                            </AnimatePresence>
+
+                            <AnimatePresence>
+                              {mostrarPeriodoPago && (
                                 <motion.div
                                   className="form-group"
                                   initial={{ opacity: 0, y: -8 }}
@@ -1118,6 +1180,7 @@ function TransaccionesContent() {
                                 monto: t.monto.toString(),
                                 fecha: t.fecha,
                                 periodo_pago: t.periodo_pago || getPeriodoFromDate(t.fecha),
+                                es_mensualidad: Boolean(t.periodo_pago),
                                 metodo_pago: t.metodo_pago,
                                 servicio_id: t.servicio_id || "",
                                 categoria_id: t.categoria_id || "",
