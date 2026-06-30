@@ -428,7 +428,7 @@ function TransaccionesContent() {
                 </Dialog.Overlay>
                 <Dialog.Content asChild>
                   <motion.div
-                    className="fixed top-1/2 left-1/2 w-full max-w-5xl z-[301] outline-none p-4"
+                    className="fixed top-1/2 left-1/2 w-full max-w-5xl max-h-[calc(100dvh-1rem)] z-[301] outline-none overflow-y-auto p-3 sm:p-4"
                     initial={{ opacity: 0, scale: 0.95, x: "-50%", y: "-48%" }}
                     animate={{ opacity: 1, scale: 1, x: "-50%", y: "-50%" }}
                     exit={{ opacity: 0, scale: 0.95, x: "-50%", y: "-48%" }}
@@ -436,7 +436,7 @@ function TransaccionesContent() {
                   >
                     {/* Box double-bezel wrapper */}
                     <div className="p-1.5 bg-white/5 dark:bg-white/5 border border-white/10 dark:border-white/5 rounded-[28px] shadow-2xl backdrop-blur-xl">
-                      <div className="bg-white/95 dark:bg-[#131b2e]/95 border border-white/10 dark:border-white/5 rounded-[22px] p-6 text-[var(--text)]">
+                      <div className="bg-white/95 dark:bg-[#131b2e]/95 border border-white/10 dark:border-white/5 rounded-[22px] p-4 sm:p-6 text-[var(--text)]">
                         <div className="flex items-center justify-between mb-4 pb-3 border-b border-[var(--border)]">
                           <div>
                             <Dialog.Title className="text-lg font-extrabold tracking-tight">
@@ -1521,6 +1521,25 @@ function TransaccionesContent() {
           gap: 0.75rem;
           padding-top: 1.25rem;
           border-top: 1px solid var(--border);
+        }
+
+        @media (max-width: 600px) {
+          .form-actions {
+            position: sticky;
+            bottom: -1rem;
+            z-index: 1;
+            margin-left: -1rem;
+            margin-right: -1rem;
+            margin-bottom: -1rem;
+            padding: 0.875rem 1rem 1rem;
+            background: rgba(19, 27, 46, 0.98);
+            backdrop-filter: blur(18px);
+            -webkit-backdrop-filter: blur(18px);
+          }
+
+          [data-theme="light"] .form-actions {
+            background: rgba(255, 255, 255, 0.98);
+          }
         }
 
         .list-empty {
