@@ -391,6 +391,31 @@ function TransaccionesContent() {
     setCategoriaSearch("");
   };
 
+  const getTransaccionCategoriaLabel = (transaccion: TransaccionConRelaciones) => {
+    if (transaccion.servicios?.nombre) return `${transaccion.servicios.nombre} (Plan)`;
+    if (transaccion.categorias?.parent) return `${transaccion.categorias.parent.nombre} > ${transaccion.categorias.nombre}`;
+    return transaccion.categorias?.nombre ?? "—";
+  };
+
+  const editarTransaccion = (transaccion: TransaccionConRelaciones) => {
+    setEditingId(transaccion.id);
+    setComprobanteUrl(transaccion.comprobante_url);
+    reset({
+      tipo: transaccion.tipo,
+      monto: transaccion.monto.toString(),
+      fecha: transaccion.fecha,
+      periodo_pago: transaccion.periodo_pago || getPeriodoFromDate(transaccion.fecha),
+      es_mensualidad: Boolean(transaccion.periodo_pago),
+      metodo_pago: transaccion.metodo_pago,
+      servicio_id: transaccion.servicio_id || "",
+      categoria_id: transaccion.categoria_id || "",
+      paciente_id: transaccion.paciente_id || "",
+      terapeuta_id: transaccion.terapeuta_id || "",
+      detalle: transaccion.detalle || "",
+    });
+    setShowForm(true);
+  };
+
   return (
     <div className="page animate-fade-in-up">
       {/* Header */}
@@ -1093,126 +1118,185 @@ function TransaccionesContent() {
               <p>No hay transacciones registradas</p>
             </div>
           ) : (
-            <div className="table-responsive">
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th>Fecha</th>
-                    <th>Tipo</th>
-                    <th>Categoría</th>
-                    <th>Detalle</th>
-                    <th>Método</th>
-                    <th>Mes pagado</th>
-                    <th>Paciente</th>
-                    <th style={{ textAlign: "right" }}>Monto</th>
-                    <th></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {transaccionesPagination.paginatedItems.map((t, i) => (
-                    <motion.tr
-                      key={t.id}
-                      initial={{ opacity: 0, x: -8 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: Math.min(i * 0.03, 0.3) }}
-                    >
-                      <td>
-                        <span className="mono font-semibold">{formatFechaCorta(t.fecha)}</span>
-                      </td>
-                      <td>
-                        <span className={`badge ${t.tipo === "ingreso" ? "badge-green" : "badge-red"}`}>
-                          {t.tipo === "ingreso" ? "↑ Ingreso" : "↓ Egreso"}
-                        </span>
-                      </td>
-                      <td>
-                        <span className="text-sm font-medium">
-                          {t.servicios?.nombre 
-                            ? `${t.servicios.nombre} (Plan)` 
-                            : t.categorias?.parent 
-                              ? `${t.categorias.parent.nombre} > ${t.categorias.nombre}` 
-                              : t.categorias?.nombre ?? "—"
-                          }
-                        </span>
-                      </td>
-                      <td>
-                        <span className="text-sm text-[var(--text-muted)]">{t.detalle ?? "—"}</span>
-                      </td>
-                      <td>
-                        <span className="badge badge-muted capitalize">{t.metodo_pago}</span>
-                      </td>
-                      <td>
-                        <span className="text-sm text-[var(--text-muted)] capitalize">
-                          {t.tipo === "ingreso" ? formatPeriodoPago(t.periodo_pago) : "—"}
-                        </span>
-                      </td>
-                      <td>
-                        <span className="text-sm font-medium">
-                          {t.pacientes?.nombre_completo ?? "—"}
-                        </span>
-                      </td>
-                      <td style={{ textAlign: "right" }}>
-                        <span
-                          className="mono font-bold text-sm"
-                          style={{ color: t.tipo === "ingreso" ? "var(--accent)" : "var(--red)" }}
-                        >
-                          {t.tipo === "ingreso" ? "+" : "-"}{formatHNL(t.monto)}
-                        </span>
-                      </td>
-                      <td>
-                        <div className="row-actions">
-                          {t.comprobante_url && (
-                            <a
-                              href={t.comprobante_url}
-                              target="_blank"
-                              rel="noopener noreferrer"
+            <>
+              <div className="table-responsive">
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th>Fecha</th>
+                      <th>Tipo</th>
+                      <th>Categoría</th>
+                      <th>Detalle</th>
+                      <th>Método</th>
+                      <th>Mes pagado</th>
+                      <th>Paciente</th>
+                      <th style={{ textAlign: "right" }}>Monto</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {transaccionesPagination.paginatedItems.map((t, i) => (
+                      <motion.tr
+                        key={t.id}
+                        initial={{ opacity: 0, x: -8 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ delay: Math.min(i * 0.03, 0.3) }}
+                      >
+                        <td>
+                          <span className="mono font-semibold">{formatFechaCorta(t.fecha)}</span>
+                        </td>
+                        <td>
+                          <span className={`badge ${t.tipo === "ingreso" ? "badge-green" : "badge-red"}`}>
+                            {t.tipo === "ingreso" ? "↑ Ingreso" : "↓ Egreso"}
+                          </span>
+                        </td>
+                        <td>
+                          <span className="text-sm font-medium">
+                            {getTransaccionCategoriaLabel(t)}
+                          </span>
+                        </td>
+                        <td>
+                          <span className="text-sm text-[var(--text-muted)]">{t.detalle ?? "—"}</span>
+                        </td>
+                        <td>
+                          <span className="badge badge-muted capitalize">{t.metodo_pago}</span>
+                        </td>
+                        <td>
+                          <span className="text-sm text-[var(--text-muted)] capitalize">
+                            {t.tipo === "ingreso" ? formatPeriodoPago(t.periodo_pago) : "—"}
+                          </span>
+                        </td>
+                        <td>
+                          <span className="text-sm font-medium">
+                            {t.pacientes?.nombre_completo ?? "—"}
+                          </span>
+                        </td>
+                        <td style={{ textAlign: "right" }}>
+                          <span
+                            className="mono font-bold text-sm"
+                            style={{ color: t.tipo === "ingreso" ? "var(--accent)" : "var(--red)" }}
+                          >
+                            {t.tipo === "ingreso" ? "+" : "-"}{formatHNL(t.monto)}
+                          </span>
+                        </td>
+                        <td>
+                          <div className="row-actions">
+                            {t.comprobante_url && (
+                              <a
+                                href={t.comprobante_url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="icon-btn"
+                                aria-label="Ver comprobante"
+                              >
+                                <Eye size={14} />
+                              </a>
+                            )}
+                            <button
+                              onClick={() => editarTransaccion(t)}
                               className="icon-btn"
-                              aria-label="Ver comprobante"
+                              aria-label="Editar transacción"
                             >
-                              <Eye size={14} />
-                            </a>
-                          )}
-                          <button
-                            onClick={() => {
-                              setEditingId(t.id);
-                              setComprobanteUrl(t.comprobante_url);
-                              reset({
-                                tipo: t.tipo,
-                                monto: t.monto.toString(),
-                                fecha: t.fecha,
-                                periodo_pago: t.periodo_pago || getPeriodoFromDate(t.fecha),
-                                es_mensualidad: Boolean(t.periodo_pago),
-                                metodo_pago: t.metodo_pago,
-                                servicio_id: t.servicio_id || "",
-                                categoria_id: t.categoria_id || "",
-                                paciente_id: t.paciente_id || "",
-                                terapeuta_id: t.terapeuta_id || "",
-                                detalle: t.detalle || "",
-                              });
-                              setShowForm(true);
-                            }}
-                            className="icon-btn"
-                            aria-label="Editar transacción"
-                          >
-                            <Pencil size={14} />
-                          </button>
-                          <button
-                            className="icon-btn danger"
-                            onClick={() => {
-                              if (confirm("¿Eliminar esta transacción?")) {
-                                deleteMutation.mutate(t.id);
-                              }
-                            }}
-                            aria-label="Eliminar transacción"
-                          >
-                            <Trash2 size={14} />
-                          </button>
+                              <Pencil size={14} />
+                            </button>
+                            <button
+                              className="icon-btn danger"
+                              onClick={() => {
+                                if (confirm("¿Eliminar esta transacción?")) {
+                                  deleteMutation.mutate(t.id);
+                                }
+                              }}
+                              aria-label="Eliminar transacción"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+                        </td>
+                      </motion.tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div className="mobile-transactions-list" aria-label="Transacciones">
+              {transaccionesPagination.paginatedItems.map((t, i) => {
+                const isIngreso = t.tipo === "ingreso";
+                const categoriaLabel = getTransaccionCategoriaLabel(t);
+                const periodoPago = isIngreso ? formatPeriodoPago(t.periodo_pago) : "—";
+
+                return (
+                  <motion.article
+                    key={t.id}
+                    className={`mobile-transaction-card ${isIngreso ? "income" : "expense"}`}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: Math.min(i * 0.03, 0.3) }}
+                  >
+                    <div className="mobile-card-top">
+                      <div>
+                        <span className={`badge ${isIngreso ? "badge-green" : "badge-red"}`}>
+                          {isIngreso ? "↑ Ingreso" : "↓ Egreso"}
+                        </span>
+                        <p className="mobile-card-date mono">{formatFechaCorta(t.fecha)} · {t.metodo_pago}</p>
+                      </div>
+                      <span className="mobile-card-amount mono">
+                        {isIngreso ? "+" : "-"}{formatHNL(t.monto)}
+                      </span>
+                    </div>
+
+                    <div className="mobile-card-main">
+                      <h3>{categoriaLabel}</h3>
+                      {t.detalle && <p>{t.detalle}</p>}
+                    </div>
+
+                    <div className="mobile-card-meta">
+                      <div>
+                        <span>Paciente</span>
+                        <strong>{t.pacientes?.nombre_completo ?? "—"}</strong>
+                      </div>
+                      {isIngreso && t.periodo_pago && (
+                        <div>
+                          <span>Mes pagado</span>
+                          <strong className="capitalize">{periodoPago}</strong>
                         </div>
-                      </td>
-                    </motion.tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                      )}
+                    </div>
+
+                    <div className="mobile-card-actions">
+                      {t.comprobante_url && (
+                        <a
+                          href={t.comprobante_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="icon-btn"
+                          aria-label="Ver comprobante"
+                        >
+                          <Eye size={14} />
+                        </a>
+                      )}
+                      <button
+                        onClick={() => editarTransaccion(t)}
+                        className="icon-btn"
+                        aria-label="Editar transacción"
+                      >
+                        <Pencil size={14} />
+                      </button>
+                      <button
+                        className="icon-btn danger"
+                        onClick={() => {
+                          if (confirm("¿Eliminar esta transacción?")) {
+                            deleteMutation.mutate(t.id);
+                          }
+                        }}
+                        aria-label="Eliminar transacción"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  </motion.article>
+                );
+              })}
+              </div>
+            </>
           )}
         </div>
         <Pagination
@@ -1539,6 +1623,166 @@ function TransaccionesContent() {
 
           [data-theme="light"] .form-actions {
             background: rgba(255, 255, 255, 0.98);
+          }
+        }
+
+        .mobile-transactions-list {
+          display: none;
+        }
+
+        @media (max-width: 700px) {
+          :global(.table-responsive) {
+            display: none;
+          }
+
+          :global(.mobile-transactions-list) {
+            display: grid;
+            gap: 1.15rem;
+            padding-top: 0.25rem;
+          }
+
+          :global(.mobile-transaction-card) {
+            position: relative;
+            overflow: hidden;
+            border: 1px solid rgba(255, 255, 255, 0.16);
+            border-radius: 22px;
+            background:
+              linear-gradient(145deg, rgba(33, 45, 68, 0.98), rgba(17, 26, 44, 0.98)),
+              var(--surface);
+            box-shadow:
+              0 18px 34px rgba(0, 0, 0, 0.32),
+              inset 0 1px 0 rgba(255, 255, 255, 0.08);
+            padding: 1rem;
+          }
+
+          :global(.mobile-transaction-card + .mobile-transaction-card) {
+            margin-top: 0.35rem;
+          }
+
+          :global(.mobile-transaction-card::before) {
+            content: "";
+            position: absolute;
+            inset: 0 auto 0 0;
+            width: 5px;
+            background: linear-gradient(180deg, var(--accent), rgba(78, 222, 163, 0.22));
+          }
+
+          :global(.mobile-transaction-card.expense::before) {
+            background: linear-gradient(180deg, var(--red), rgba(255, 180, 171, 0.2));
+          }
+
+          :global(.mobile-transaction-card::after) {
+            content: "";
+            position: absolute;
+            inset: 0 0 auto 0;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.18), transparent);
+          }
+
+          :global(.mobile-card-top) {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 0.75rem;
+          }
+
+          :global(.mobile-card-date) {
+            margin-top: 0.55rem;
+            color: var(--text-subtle);
+            font-size: 0.6875rem;
+            font-weight: 700;
+            text-transform: capitalize;
+          }
+
+          :global(.mobile-card-amount) {
+            color: var(--accent);
+            font-size: 1rem;
+            font-weight: 900;
+            white-space: nowrap;
+          }
+
+          :global(.mobile-transaction-card.expense .mobile-card-amount) {
+            color: var(--red);
+          }
+
+          :global(.mobile-card-main) {
+            margin-top: 1rem;
+          }
+
+          :global(.mobile-card-main h3) {
+            margin: 0;
+            color: var(--text);
+            font-size: 0.95rem;
+            font-weight: 850;
+            letter-spacing: -0.01em;
+          }
+
+          :global(.mobile-card-main p) {
+            margin-top: 0.35rem;
+            color: var(--text-muted);
+            font-size: 0.8125rem;
+            line-height: 1.45;
+          }
+
+          :global(.mobile-card-meta) {
+            display: grid;
+            gap: 0.625rem;
+            margin-top: 1rem;
+            padding: 0.875rem;
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            border-radius: 14px;
+            background: rgba(9, 16, 30, 0.42);
+          }
+
+          :global(.mobile-card-meta div) {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 0.75rem;
+          }
+
+          :global(.mobile-card-meta span) {
+            color: var(--text-subtle);
+            font-family: var(--font-mono);
+            font-size: 0.625rem;
+            font-weight: 800;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+          }
+
+          :global(.mobile-card-meta strong) {
+            color: var(--text);
+            font-size: 0.75rem;
+            font-weight: 800;
+            text-align: right;
+          }
+
+          :global(.mobile-card-actions) {
+            display: flex;
+            justify-content: flex-end;
+            gap: 0.5rem;
+            margin-top: 0.875rem;
+          }
+
+          :global(.mobile-card-actions .icon-btn) {
+            width: 38px;
+            height: 38px;
+            border-color: rgba(255, 255, 255, 0.12);
+            border-radius: 12px;
+            background: rgba(255, 255, 255, 0.045);
+          }
+
+          :global([data-theme="light"] .mobile-transaction-card) {
+            border-color: rgba(15, 28, 19, 0.1);
+            background: linear-gradient(145deg, rgba(255, 255, 255, 0.98), rgba(237, 246, 241, 0.94));
+            box-shadow:
+              0 16px 34px rgba(15, 28, 19, 0.1),
+              inset 0 1px 0 rgba(255, 255, 255, 0.8);
+          }
+
+          :global([data-theme="light"] .mobile-card-meta),
+          :global([data-theme="light"] .mobile-card-actions .icon-btn) {
+            background: rgba(255, 255, 255, 0.72);
           }
         }
 

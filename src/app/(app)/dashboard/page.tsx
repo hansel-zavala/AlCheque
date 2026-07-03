@@ -35,6 +35,7 @@ export default function DashboardPage() {
         .from("transacciones")
         .select("*")
         .eq("centro_id", centroId)
+        .is("deleted_at", null)
         .gte("fecha", primerDia)
         .lte("fecha", ultimoDia);
       return (data ?? []) as Transaccion[];
@@ -80,6 +81,7 @@ export default function DashboardPage() {
             .from("transacciones")
             .select("tipo, monto")
             .eq("centro_id", centroId)
+            .is("deleted_at", null)
             .gte("fecha", inicio)
             .lte("fecha", finStr);
 
@@ -230,7 +232,7 @@ export default function DashboardPage() {
         ) : (
           <div className="empty-chart glass-card">
             <AlertCircle size={24} style={{ color: "var(--text-subtle)" }} />
-            <p>Sin datos de ingresos este mes</p>
+            <p>Sin datos de ingresos este mes8</p>
           </div>
         )}
       </div>

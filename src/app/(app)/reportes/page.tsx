@@ -33,6 +33,7 @@ export default function ReportesPage() {
         .from("transacciones")
         .select("*, servicios(id, nombre), categorias(id, nombre, tipo), pacientes(id, nombre_completo)")
         .eq("centro_id", centroId)
+        .is("deleted_at", null)
         .gte("fecha", fechaInicio)
         .lte("fecha", fechaFin)
         .order("fecha", { ascending: false });

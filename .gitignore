@@ -50,3 +50,4 @@ package-lock.json
 .atl
 scratch
 output_egresos.sql
+mcp_config.json
