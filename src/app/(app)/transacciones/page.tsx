@@ -60,6 +60,7 @@ function TransaccionesContent() {
   const [filtroPacienteId, setFiltroPacienteId] = useState("todos");
   const [categoriaSearch, setCategoriaSearch] = useState("");
   const [comprobanteUrl, setComprobanteUrl] = useState<string | null>(null);
+  const [selectedReceiptTransaction, setSelectedReceiptTransaction] = useState<TransaccionConRelaciones | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
 
   const [showNuevaCategoriaForm, setShowNuevaCategoriaForm] = useState(false);
@@ -396,6 +397,15 @@ function TransaccionesContent() {
     if (transaccion.categorias?.parent) return `${transaccion.categorias.parent.nombre} > ${transaccion.categorias.nombre}`;
     return transaccion.categorias?.nombre ?? "—";
   };
+
+  const getReceiptDetails = (transaccion: TransaccionConRelaciones) => [
+    { label: "Categoría", value: getTransaccionCategoriaLabel(transaccion) },
+    { label: "Paciente", value: transaccion.pacientes?.nombre_completo ?? "—" },
+    { label: "Método de pago", value: transaccion.metodo_pago },
+    { label: "Mes pagado", value: transaccion.tipo === "ingreso" ? formatPeriodoPago(transaccion.periodo_pago) : "—" },
+    { label: "Terapeuta", value: transaccion.terapeutas?.nombre_completo ?? "—" },
+    { label: "Detalle", value: transaccion.detalle ?? "Sin detalle" },
+  ];
 
   const editarTransaccion = (transaccion: TransaccionConRelaciones) => {
     setEditingId(transaccion.id);
@@ -873,6 +883,112 @@ function TransaccionesContent() {
         </Dialog.Portal>
       </Dialog.Root>
 
+      <Dialog.Root
+        open={!!selectedReceiptTransaction}
+        onOpenChange={(open) => {
+          if (!open) setSelectedReceiptTransaction(null);
+        }}
+      >
+        <Dialog.Portal>
+          <AnimatePresence>
+            {selectedReceiptTransaction && (
+              <>
+                <Dialog.Overlay asChild>
+                  <motion.div
+                    className="fixed inset-0 bg-black/70 z-[320] backdrop-blur-md"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.2 }}
+                  />
+                </Dialog.Overlay>
+                <Dialog.Content asChild>
+                  <motion.div
+                    className="receipt-dialog fixed top-1/2 left-1/2 w-full max-w-6xl max-h-[calc(100dvh-1rem)] z-[321] outline-none overflow-y-auto p-3 sm:p-4"
+                    initial={{ opacity: 0, scale: 0.96, x: "-50%", y: "-48%" }}
+                    animate={{ opacity: 1, scale: 1, x: "-50%", y: "-50%" }}
+                    exit={{ opacity: 0, scale: 0.96, x: "-50%", y: "-48%" }}
+                    transition={{ duration: 0.24, ease: [0.32, 0.72, 0, 1] }}
+                  >
+                    <div className="receipt-shell">
+                      <div className="receipt-panel">
+                        <div className="receipt-head">
+                          <div>
+                            <Dialog.Title className="receipt-title">
+                              Comprobante de transacción
+                            </Dialog.Title>
+                            <Dialog.Description className="receipt-subtitle">
+                              Revisa el recibo junto con los datos registrados.
+                            </Dialog.Description>
+                          </div>
+                          <Dialog.Close asChild>
+                            <button type="button" className="receipt-close icon-btn btn-pressable" aria-label="Cerrar comprobante">
+                              <X size={14} />
+                            </button>
+                          </Dialog.Close>
+                        </div>
+
+                        <div className="receipt-layout">
+                          <section className="receipt-summary" aria-label="Datos de la transacción">
+                            <div className="receipt-status-row">
+                              <span className={`badge ${selectedReceiptTransaction.tipo === "ingreso" ? "badge-green" : "badge-red"}`}>
+                                {selectedReceiptTransaction.tipo === "ingreso" ? "↑ Ingreso" : "↓ Egreso"}
+                              </span>
+                              <span className="receipt-date mono">{formatFechaCorta(selectedReceiptTransaction.fecha)}</span>
+                            </div>
+
+                            <p
+                              className="receipt-amount mono"
+                              style={{ color: selectedReceiptTransaction.tipo === "ingreso" ? "var(--accent)" : "var(--red)" }}
+                            >
+                              {selectedReceiptTransaction.tipo === "ingreso" ? "+" : "-"}{formatHNL(selectedReceiptTransaction.monto)}
+                            </p>
+
+                            <div className="receipt-detail-list">
+                              {getReceiptDetails(selectedReceiptTransaction).map((item) => (
+                                <div key={item.label} className="receipt-detail-item">
+                                  <span>{item.label}</span>
+                                  <strong className={item.label === "Método de pago" || item.label === "Mes pagado" ? "capitalize" : ""}>
+                                    {item.value}
+                                  </strong>
+                                </div>
+                              ))}
+                            </div>
+
+                            <div className="receipt-actions">
+                              <a
+                                href={selectedReceiptTransaction.comprobante_url ?? "#"}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="receipt-link btn-pressable"
+                              >
+                                Abrir imagen original
+                              </a>
+                            </div>
+                          </section>
+
+                          <section className="receipt-preview" aria-label="Imagen del comprobante">
+                            <div className="receipt-image-frame">
+                              {/* Dynamic receipt URLs are user uploads, so avoid Next image host config here. */}
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img
+                                src={selectedReceiptTransaction.comprobante_url ?? ""}
+                                alt={`Comprobante de ${getTransaccionCategoriaLabel(selectedReceiptTransaction)}`}
+                                className="receipt-image"
+                              />
+                            </div>
+                          </section>
+                        </div>
+                      </div>
+                    </div>
+                  </motion.div>
+                </Dialog.Content>
+              </>
+            )}
+          </AnimatePresence>
+        </Dialog.Portal>
+      </Dialog.Root>
+
       {/* Filtros de fecha */}
       <div className="filters-card glass-card">
         <div className="filter-group">
@@ -1182,15 +1298,14 @@ function TransaccionesContent() {
                         <td>
                           <div className="row-actions">
                             {t.comprobante_url && (
-                              <a
-                                href={t.comprobante_url}
-                                target="_blank"
-                                rel="noopener noreferrer"
+                              <button
+                                type="button"
+                                onClick={() => setSelectedReceiptTransaction(t)}
                                 className="icon-btn"
                                 aria-label="Ver comprobante"
                               >
                                 <Eye size={14} />
-                              </a>
+                              </button>
                             )}
                             <button
                               onClick={() => editarTransaccion(t)}
@@ -1263,15 +1378,14 @@ function TransaccionesContent() {
 
                     <div className="mobile-card-actions">
                       {t.comprobante_url && (
-                        <a
-                          href={t.comprobante_url}
-                          target="_blank"
-                          rel="noopener noreferrer"
+                        <button
+                          type="button"
+                          onClick={() => setSelectedReceiptTransaction(t)}
                           className="icon-btn"
                           aria-label="Ver comprobante"
                         >
                           <Eye size={14} />
-                        </a>
+                        </button>
                       )}
                       <button
                         onClick={() => editarTransaccion(t)}
@@ -1607,6 +1721,190 @@ function TransaccionesContent() {
           border-top: 1px solid var(--border);
         }
 
+        :global(.receipt-shell) {
+          padding: 0.375rem;
+          border: 1px solid rgba(255, 255, 255, 0.1);
+          border-radius: 24px;
+          background: rgba(255, 255, 255, 0.05);
+          box-shadow: 0 22px 60px rgba(0, 0, 0, 0.36);
+        }
+
+        :global(.receipt-panel) {
+          border: 1px solid rgba(255, 255, 255, 0.08);
+          border-radius: 19px;
+          background: rgba(19, 27, 46, 0.97);
+          color: var(--text);
+          padding: 1.25rem;
+        }
+
+        :global(.receipt-head) {
+          display: flex;
+          align-items: flex-start;
+          justify-content: space-between;
+          gap: 1rem;
+          margin-bottom: 1rem;
+          padding-bottom: 1rem;
+          border-bottom: 1px solid var(--border);
+        }
+
+        :global(.receipt-title) {
+          margin: 0;
+          color: var(--text);
+          font-size: 1rem;
+          font-weight: 900;
+          letter-spacing: -0.01em;
+        }
+
+        :global(.receipt-subtitle) {
+          margin-top: 0.25rem;
+          color: var(--text-muted);
+          font-size: 0.8125rem;
+          line-height: 1.4;
+        }
+
+        :global(.receipt-close) {
+          flex: 0 0 auto;
+          width: 34px;
+          height: 34px;
+          border-radius: 999px;
+        }
+
+        :global(.receipt-layout) {
+          display: grid;
+          grid-template-columns: minmax(280px, 0.8fr) minmax(0, 1.2fr);
+          gap: 1rem;
+          align-items: stretch;
+        }
+
+        :global(.receipt-summary),
+        :global(.receipt-preview) {
+          min-width: 0;
+          border: 1px solid var(--border);
+          border-radius: 16px;
+          background: var(--bg-subtle);
+        }
+
+        :global(.receipt-summary) {
+          display: flex;
+          flex-direction: column;
+          gap: 1rem;
+          padding: 1rem;
+        }
+
+        :global(.receipt-status-row) {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 0.75rem;
+        }
+
+        :global(.receipt-date) {
+          color: var(--text-subtle);
+          font-size: 0.75rem;
+          font-weight: 800;
+        }
+
+        :global(.receipt-amount) {
+          margin: 0;
+          font-size: 2rem;
+          font-weight: 950;
+          letter-spacing: -0.04em;
+        }
+
+        :global(.receipt-detail-list) {
+          display: grid;
+          gap: 0.5rem;
+        }
+
+        :global(.receipt-detail-item) {
+          display: grid;
+          gap: 0.25rem;
+          padding: 0.75rem 0;
+          border-top: 1px solid var(--border);
+        }
+
+        :global(.receipt-detail-item span) {
+          color: var(--text-subtle);
+          font-family: var(--font-mono);
+          font-size: 0.625rem;
+          font-weight: 850;
+          letter-spacing: 0.08em;
+          text-transform: uppercase;
+        }
+
+        :global(.receipt-detail-item strong) {
+          color: var(--text);
+          font-size: 0.875rem;
+          font-weight: 750;
+          line-height: 1.35;
+          overflow-wrap: anywhere;
+        }
+
+        :global(.receipt-actions) {
+          margin-top: auto;
+          padding-top: 0.25rem;
+        }
+
+        :global(.receipt-link) {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          min-height: 40px;
+          width: 100%;
+          border: 1px solid var(--border-strong);
+          border-radius: 12px;
+          background: var(--surface);
+          color: var(--text);
+          font-size: 0.75rem;
+          font-weight: 850;
+          text-decoration: none;
+          transition: background 150ms var(--ease-out), border-color 150ms var(--ease-out);
+        }
+
+        :global(.receipt-link:hover) {
+          background: var(--surface-hover);
+          border-color: var(--accent);
+        }
+
+        :global(.receipt-preview) {
+          padding: 0.75rem;
+        }
+
+        :global(.receipt-image-frame) {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          min-height: min(62vh, 640px);
+          height: 100%;
+          overflow: hidden;
+          border-radius: 12px;
+          background: #050914;
+        }
+
+        :global(.receipt-image) {
+          display: block;
+          max-width: 100%;
+          max-height: min(62vh, 640px);
+          width: auto;
+          height: auto;
+          object-fit: contain;
+        }
+
+        :global([data-theme="light"] .receipt-shell) {
+          border-color: rgba(15, 28, 19, 0.08);
+          background: rgba(255, 255, 255, 0.58);
+          box-shadow: 0 22px 54px rgba(15, 28, 19, 0.16);
+        }
+
+        :global([data-theme="light"] .receipt-panel) {
+          border-color: rgba(15, 28, 19, 0.08);
+          background: rgba(255, 255, 255, 0.98);
+        }
+
+        :global([data-theme="light"] .receipt-image-frame) {
+          background: #eef3ef;
+        }
+
         @media (max-width: 600px) {
           .form-actions {
             position: sticky;
@@ -1624,9 +1922,65 @@ function TransaccionesContent() {
           [data-theme="light"] .form-actions {
             background: rgba(255, 255, 255, 0.98);
           }
+
+          :global(.receipt-dialog) {
+            top: 0;
+            left: 0;
+            max-height: 100dvh;
+            padding: 0;
+            transform: none !important;
+          }
+
+          :global(.receipt-shell) {
+            min-height: 100dvh;
+            padding: 0;
+            border: 0;
+            border-radius: 0;
+            box-shadow: none;
+          }
+
+          :global(.receipt-panel) {
+            min-height: 100dvh;
+            border: 0;
+            border-radius: 0;
+            padding: 1rem;
+          }
+
+          :global(.receipt-head) {
+            position: sticky;
+            top: 0;
+            z-index: 1;
+            margin: -1rem -1rem 1rem;
+            padding: 1rem;
+            background: rgba(19, 27, 46, 0.98);
+          }
+
+          :global([data-theme="light"] .receipt-head) {
+            background: rgba(255, 255, 255, 0.98);
+          }
+
+          :global(.receipt-layout) {
+            grid-template-columns: 1fr;
+          }
+
+          :global(.receipt-preview) {
+            order: -1;
+          }
+
+          :global(.receipt-image-frame) {
+            min-height: 44vh;
+          }
+
+          :global(.receipt-image) {
+            max-height: 56vh;
+          }
+
+          :global(.receipt-amount) {
+            font-size: 1.65rem;
+          }
         }
 
-        .mobile-transactions-list {
+        :global(.mobile-transactions-list) {
           display: none;
         }
 
