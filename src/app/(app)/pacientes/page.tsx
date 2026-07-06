@@ -187,6 +187,17 @@ export default function PacientesPage() {
 
   const ordenActual = ORDEN_PACIENTES.find((option) => option.value === ordenPacientes)?.label;
 
+  const editarPaciente = (paciente: PacienteConPlan) => {
+    setEditingId(paciente.id);
+    reset({
+      nombre_completo: paciente.nombre_completo,
+      fecha_ingreso: toDateInputValue(paciente.fecha_ingreso),
+      plan_id: paciente.plan_id || "",
+      estado_suscripcion: paciente.estado_suscripcion,
+    });
+    setShowForm(true);
+  };
+
   const { data: planes = [] } = useQuery({
     queryKey: ["planes", centroId],
     queryFn: async () => {
@@ -691,105 +702,168 @@ export default function PacientesPage() {
               <p>No hay pacientes registrados</p>
             </div>
           ) : (
-            <div className="table-responsive">
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th>Paciente</th>
-                    <th>Fecha de ingreso</th>
-                    <th>Estado</th>
-                    <th>Acciones</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {pacientesPagination.paginatedItems.map((p, i) => (
-                    <motion.tr
-                      key={p.id}
-                      initial={{ opacity: 0, x: -8 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: Math.min(i * 0.03, 0.3) }}
-                    >
-                      <td>
-                        <div className="flex items-center gap-3">
-                          <div className="pc-avatar flex items-center justify-center font-bold text-xs bg-[var(--accent-muted)] text-[var(--accent)] w-9 h-9 rounded-full">
-                            {p.nombre_completo.charAt(0).toUpperCase()}
+            <>
+              <div className="table-responsive">
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th>Paciente</th>
+                      <th>Fecha de ingreso</th>
+                      <th>Estado</th>
+                      <th>Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {pacientesPagination.paginatedItems.map((p, i) => (
+                      <motion.tr
+                        key={p.id}
+                        initial={{ opacity: 0, x: -8 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ delay: Math.min(i * 0.03, 0.3) }}
+                      >
+                        <td>
+                          <div className="flex items-center gap-3">
+                            <div className="pc-avatar flex items-center justify-center font-bold text-xs bg-[var(--accent-muted)] text-[var(--accent)] w-9 h-9 rounded-full">
+                              {p.nombre_completo.charAt(0).toUpperCase()}
+                            </div>
+                            <div>
+                              <Link href={`/pacientes/${p.id}`} className="patient-link font-bold">
+                                {p.nombre_completo}
+                              </Link>
+                              <span className="block text-[10px] font-mono text-[var(--text-subtle)] mt-0.5">
+                                ID: PAC-{p.id.slice(0, 4).toUpperCase()}
+                              </span>
+                            </div>
                           </div>
-                          <div>
-                            <Link href={`/pacientes/${p.id}`} className="patient-link font-bold">
-                              {p.nombre_completo}
-                            </Link>
-                            <span className="block text-[10px] font-mono text-[var(--text-subtle)] mt-0.5">
-                              ID: PAC-{p.id.slice(0, 4).toUpperCase()}
-                            </span>
+                        </td>
+                        <td className="font-mono text-xs text-[var(--text-muted)]">
+                          {formatFechaCorta(p.fecha_ingreso)}
+                        </td>
+                        <td>
+                          <span className={`badge ${ESTADO_BADGE[p.estado_suscripcion]}`}>
+                            {ESTADO_LABEL[p.estado_suscripcion]}
+                          </span>
+                        </td>
+                        <td>
+                          <div className="flex items-center gap-1.5">
+                            <button onClick={() => router.push(`/pacientes/${p.id}`)} className="icon-btn save btn-pressable" aria-label="Ver perfil">
+                              <CircleUserRound size={15} />
+                            </button>
+                            <button onClick={() => editarPaciente(p)} className="icon-btn btn-pressable" aria-label="Editar paciente">
+                              <Pencil size={15} />
+                            </button>
+                            <button
+                              className="icon-btn btn-pressable"
+                              onClick={() => {
+                                const nuevoEstado = p.estado_suscripcion === "activo" ? "cancelado" : "activo";
+                                toggleStatusMutation.mutate({ id: p.id, nuevoEstado });
+                              }}
+                              disabled={toggleStatusMutation.isPending}
+                              aria-label={p.estado_suscripcion === "activo" ? "Desactivar paciente" : "Activar paciente"}
+                            >
+                              {p.estado_suscripcion === "activo" ? (
+                                <ToggleRight size={18} className="text-[var(--accent)]" />
+                              ) : (
+                                <ToggleLeft size={18} className="text-[var(--text-muted)]" />
+                              )}
+                            </button>
+                            <button
+                              className="icon-btn danger btn-pressable"
+                              onClick={() => {
+                                if (confirm(`¿Eliminar a ${p.nombre_completo}? Se perderán todos sus datos.`)) {
+                                  deleteMutation.mutate(p.id);
+                                }
+                              }}
+                              aria-label="Eliminar paciente"
+                            >
+                              <Trash2 size={15} />
+                            </button>
                           </div>
-                        </div>
-                      </td>
-                      <td className="font-mono text-xs text-[var(--text-muted)]">
-                        {formatFechaCorta(p.fecha_ingreso)}
-                      </td>
-                      <td>
+                        </td>
+                      </motion.tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="mobile-patients-list" aria-label="Pacientes">
+                {pacientesPagination.paginatedItems.map((p, i) => (
+                  <motion.article
+                    key={p.id}
+                    className={`mobile-patient-card ${p.estado_suscripcion === "cancelado" ? "inactive" : "active"}`}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: Math.min(i * 0.03, 0.3) }}
+                  >
+                    <div className="mobile-card-top">
+                      <div>
                         <span className={`badge ${ESTADO_BADGE[p.estado_suscripcion]}`}>
                           {ESTADO_LABEL[p.estado_suscripcion]}
                         </span>
-                      </td>
-                      <td>
-                        <div className="flex items-center gap-1.5">
-                          <button
-                            onClick={() => router.push(`/pacientes/${p.id}`)}
-                            className="icon-btn save btn-pressable"
-                            aria-label="Ver perfil"
-                          >
-                            <CircleUserRound size={15} />
-                          </button>
-                          <button
-                            onClick={() => {
-                              setEditingId(p.id);
-                              reset({
-                                nombre_completo: p.nombre_completo,
-                                fecha_ingreso: toDateInputValue(p.fecha_ingreso),
-                                plan_id: p.plan_id || "",
-                                estado_suscripcion: p.estado_suscripcion,
-                              });
-                              setShowForm(true);
-                            }}
-                            className="icon-btn btn-pressable"
-                            aria-label="Editar paciente"
-                          >
-                            <Pencil size={15} />
-                          </button>
-                          <button
-                            className="icon-btn btn-pressable"
-                            onClick={() => {
-                              const nuevoEstado = p.estado_suscripcion === "activo" ? "cancelado" : "activo";
-                              toggleStatusMutation.mutate({ id: p.id, nuevoEstado });
-                            }}
-                            disabled={toggleStatusMutation.isPending}
-                            aria-label={p.estado_suscripcion === "activo" ? "Desactivar paciente" : "Activar paciente"}
-                          >
-                            {p.estado_suscripcion === "activo" ? (
-                              <ToggleRight size={18} className="text-[var(--accent)]" />
-                            ) : (
-                              <ToggleLeft size={18} className="text-[var(--text-muted)]" />
-                            )}
-                          </button>
-                          <button
-                            className="icon-btn danger btn-pressable"
-                            onClick={() => {
-                              if (confirm(`¿Eliminar a ${p.nombre_completo}? Se perderán todos sus datos.`)) {
-                                deleteMutation.mutate(p.id);
-                              }
-                            }}
-                            aria-label="Eliminar paciente"
-                          >
-                            <Trash2 size={15} />
-                          </button>
-                        </div>
-                      </td>
-                    </motion.tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                        <p className="mobile-card-date mono">Ingreso · {formatFechaCorta(p.fecha_ingreso)}</p>
+                      </div>
+                      <span className="mobile-patient-code mono">PAC-{p.id.slice(0, 4).toUpperCase()}</span>
+                    </div>
+
+                    <div className="mobile-card-main mobile-patient-main">
+                      <div className="mobile-patient-avatar">{p.nombre_completo.charAt(0).toUpperCase()}</div>
+                      <div>
+                        <Link href={`/pacientes/${p.id}`} className="patient-link">
+                          <h3>{p.nombre_completo}</h3>
+                        </Link>
+                        <p>{p.servicios?.nombre ?? "Sin plan asignado"}</p>
+                      </div>
+                    </div>
+
+                    <div className="mobile-card-meta">
+                      <div>
+                        <span>Plan</span>
+                        <strong>{p.servicios?.nombre ?? "—"}</strong>
+                      </div>
+                      <div>
+                        <span>Estado</span>
+                        <strong>{ESTADO_LABEL[p.estado_suscripcion]}</strong>
+                      </div>
+                    </div>
+
+                    <div className="mobile-card-actions">
+                      <button onClick={() => router.push(`/pacientes/${p.id}`)} className="icon-btn save btn-pressable" aria-label="Ver perfil">
+                        <CircleUserRound size={15} />
+                      </button>
+                      <button onClick={() => editarPaciente(p)} className="icon-btn btn-pressable" aria-label="Editar paciente">
+                        <Pencil size={15} />
+                      </button>
+                      <button
+                        className="icon-btn btn-pressable"
+                        onClick={() => {
+                          const nuevoEstado = p.estado_suscripcion === "activo" ? "cancelado" : "activo";
+                          toggleStatusMutation.mutate({ id: p.id, nuevoEstado });
+                        }}
+                        disabled={toggleStatusMutation.isPending}
+                        aria-label={p.estado_suscripcion === "activo" ? "Desactivar paciente" : "Activar paciente"}
+                      >
+                        {p.estado_suscripcion === "activo" ? (
+                          <ToggleRight size={18} className="text-[var(--accent)]" />
+                        ) : (
+                          <ToggleLeft size={18} className="text-[var(--text-muted)]" />
+                        )}
+                      </button>
+                      <button
+                        className="icon-btn danger btn-pressable"
+                        onClick={() => {
+                          if (confirm(`¿Eliminar a ${p.nombre_completo}? Se perderán todos sus datos.`)) {
+                            deleteMutation.mutate(p.id);
+                          }
+                        }}
+                        aria-label="Eliminar paciente"
+                      >
+                        <Trash2 size={15} />
+                      </button>
+                    </div>
+                  </motion.article>
+                ))}
+              </div>
+            </>
           )}
         </div>
 
@@ -1007,6 +1081,175 @@ export default function PacientesPage() {
           border: 1px solid var(--border);
           border-radius: 10px;
           animation: pulse 1.5s ease-in-out infinite;
+        }
+
+        :global(.mobile-patients-list) {
+          display: none;
+        }
+
+        @media (max-width: 700px) {
+          :global(.table-responsive) {
+            display: none;
+          }
+
+          :global(.mobile-patients-list) {
+            display: grid;
+            gap: 1.15rem;
+            padding: 0.25rem 1rem 1rem;
+          }
+
+          :global(.mobile-patient-card) {
+            position: relative;
+            overflow: hidden;
+            border: 1px solid rgba(255, 255, 255, 0.16);
+            border-radius: 22px;
+            background:
+              linear-gradient(145deg, rgba(33, 45, 68, 0.98), rgba(17, 26, 44, 0.98)),
+              var(--surface);
+            box-shadow:
+              0 18px 34px rgba(0, 0, 0, 0.32),
+              inset 0 1px 0 rgba(255, 255, 255, 0.08);
+            padding: 1rem;
+          }
+
+          :global(.mobile-patient-card::before) {
+            content: "";
+            position: absolute;
+            inset: 0 auto 0 0;
+            width: 5px;
+            background: linear-gradient(180deg, var(--accent), rgba(78, 222, 163, 0.22));
+          }
+
+          :global(.mobile-patient-card.inactive::before) {
+            background: linear-gradient(180deg, var(--text-subtle), rgba(134, 148, 138, 0.2));
+          }
+
+          :global(.mobile-patient-card::after) {
+            content: "";
+            position: absolute;
+            inset: 0 0 auto 0;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.18), transparent);
+          }
+
+          :global(.mobile-card-top) {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 0.75rem;
+          }
+
+          :global(.mobile-card-date),
+          :global(.mobile-patient-code) {
+            margin-top: 0.55rem;
+            color: var(--text-subtle);
+            font-size: 0.6875rem;
+            font-weight: 700;
+          }
+
+          :global(.mobile-patient-code) {
+            margin-top: 0;
+            white-space: nowrap;
+          }
+
+          :global(.mobile-card-main) {
+            margin-top: 1rem;
+          }
+
+          :global(.mobile-patient-main) {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+          }
+
+          :global(.mobile-patient-avatar) {
+            display: grid;
+            place-items: center;
+            width: 42px;
+            height: 42px;
+            flex: 0 0 auto;
+            border-radius: 999px;
+            background: var(--accent-muted);
+            color: var(--accent);
+            font-size: 0.875rem;
+            font-weight: 900;
+          }
+
+          :global(.mobile-card-main h3) {
+            margin: 0;
+            color: var(--text);
+            font-size: 0.95rem;
+            font-weight: 850;
+            letter-spacing: -0.01em;
+          }
+
+          :global(.mobile-card-main p) {
+            margin-top: 0.35rem;
+            color: var(--text-muted);
+            font-size: 0.8125rem;
+            line-height: 1.45;
+          }
+
+          :global(.mobile-card-meta) {
+            display: grid;
+            gap: 0.625rem;
+            margin-top: 1rem;
+            padding: 0.875rem;
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            border-radius: 14px;
+            background: rgba(9, 16, 30, 0.42);
+          }
+
+          :global(.mobile-card-meta div) {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 0.75rem;
+          }
+
+          :global(.mobile-card-meta span) {
+            color: var(--text-subtle);
+            font-family: var(--font-mono);
+            font-size: 0.625rem;
+            font-weight: 800;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+          }
+
+          :global(.mobile-card-meta strong) {
+            color: var(--text);
+            font-size: 0.75rem;
+            font-weight: 800;
+            text-align: right;
+          }
+
+          :global(.mobile-card-actions) {
+            display: flex;
+            justify-content: flex-end;
+            gap: 0.5rem;
+            margin-top: 0.875rem;
+          }
+
+          :global(.mobile-card-actions .icon-btn) {
+            width: 38px;
+            height: 38px;
+            border-color: rgba(255, 255, 255, 0.12);
+            border-radius: 12px;
+            background: rgba(255, 255, 255, 0.045);
+          }
+
+          :global([data-theme="light"] .mobile-patient-card) {
+            border-color: rgba(15, 28, 19, 0.1);
+            background: linear-gradient(145deg, rgba(255, 255, 255, 0.98), rgba(237, 246, 241, 0.94));
+            box-shadow:
+              0 16px 34px rgba(15, 28, 19, 0.1),
+              inset 0 1px 0 rgba(255, 255, 255, 0.8);
+          }
+
+          :global([data-theme="light"] .mobile-card-meta),
+          :global([data-theme="light"] .mobile-card-actions .icon-btn) {
+            background: rgba(255, 255, 255, 0.72);
+          }
         }
 
         @keyframes pulse {

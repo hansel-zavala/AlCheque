@@ -317,54 +317,108 @@ export default function ReportesPage() {
             <p>No hay transacciones en este período</p>
           </div>
         ) : (
-          <div className="table-responsive">
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>Fecha</th>
-                  <th>Tipo</th>
-                  <th>Categoría</th>
-                  <th>Detalle</th>
-                  <th>Método</th>
-                  <th>Paciente</th>
-                  <th style={{ textAlign: "right" }}>Monto</th>
-                </tr>
-              </thead>
-              <tbody>
-                {transacciones.map((t) => (
-                  <tr key={t.id}>
-                    <td><span className="mono font-semibold">{formatFechaCorta(t.fecha)}</span></td>
-                    <td>
-                      <span className={`badge ${t.tipo === "ingreso" ? "badge-green" : "badge-red"}`}>
-                        {t.tipo === "ingreso" ? "↑ Ingreso" : "↓ Egreso"}
-                      </span>
+          <>
+            <div className="table-responsive">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Fecha</th>
+                    <th>Tipo</th>
+                    <th>Categoría</th>
+                    <th>Detalle</th>
+                    <th>Método</th>
+                    <th>Paciente</th>
+                    <th style={{ textAlign: "right" }}>Monto</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {transacciones.map((t) => (
+                    <tr key={t.id}>
+                      <td><span className="mono font-semibold">{formatFechaCorta(t.fecha)}</span></td>
+                      <td>
+                        <span className={`badge ${t.tipo === "ingreso" ? "badge-green" : "badge-red"}`}>
+                          {t.tipo === "ingreso" ? "↑ Ingreso" : "↓ Egreso"}
+                        </span>
+                      </td>
+                      <td><span className="text-sm font-medium">{t.servicios?.nombre ?? t.categorias?.nombre ?? "—"}</span></td>
+                      <td><span className="text-sm text-[var(--text-muted)]">{t.detalle ?? "—"}</span></td>
+                      <td><span className="badge badge-muted capitalize">{t.metodo_pago}</span></td>
+                      <td><span className="text-sm font-medium">{t.pacientes?.nombre_completo ?? "—"}</span></td>
+                      <td style={{ textAlign: "right" }}>
+                        <span className="mono font-bold text-sm" style={{ color: t.tipo === "ingreso" ? "var(--accent)" : "var(--red)" }}>
+                          {t.tipo === "ingreso" ? "+" : "-"}{formatHNL(t.monto)}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr className="table-foot">
+                    <td colSpan={6} style={{ textAlign: "right", fontWeight: 700, color: "var(--text-muted)" }}>
+                      Balance del período:
                     </td>
-                    <td><span className="text-sm font-medium">{t.servicios?.nombre ?? t.categorias?.nombre ?? "—"}</span></td>
-                    <td><span className="text-sm text-[var(--text-muted)]">{t.detalle ?? "—"}</span></td>
-                    <td><span className="badge badge-muted capitalize">{t.metodo_pago}</span></td>
-                    <td><span className="text-sm font-medium">{t.pacientes?.nombre_completo ?? "—"}</span></td>
                     <td style={{ textAlign: "right" }}>
-                      <span className="mono font-bold text-sm" style={{ color: t.tipo === "ingreso" ? "var(--accent)" : "var(--red)" }}>
-                        {t.tipo === "ingreso" ? "+" : "-"}{formatHNL(t.monto)}
+                      <span className="mono font-extrabold text-sm" style={{ color: balance >= 0 ? "var(--accent)" : "var(--red)" }}>
+                        {balance >= 0 ? "+" : ""}{formatHNL(balance)}
                       </span>
                     </td>
                   </tr>
-                ))}
-              </tbody>
-              <tfoot>
-                <tr className="table-foot">
-                  <td colSpan={6} style={{ textAlign: "right", fontWeight: 700, color: "var(--text-muted)" }}>
-                    Balance del período:
-                  </td>
-                  <td style={{ textAlign: "right" }}>
-                    <span className="mono font-extrabold text-sm" style={{ color: balance >= 0 ? "var(--accent)" : "var(--red)" }}>
-                      {balance >= 0 ? "+" : ""}{formatHNL(balance)}
-                    </span>
-                  </td>
-                </tr>
-              </tfoot>
-            </table>
-          </div>
+                </tfoot>
+              </table>
+            </div>
+
+            <div className="mobile-report-list" aria-label="Detalle de transacciones">
+              {transacciones.map((t, index) => {
+                const isIngreso = t.tipo === "ingreso";
+                const categoria = t.servicios?.nombre ?? t.categorias?.nombre ?? "—";
+
+                return (
+                  <motion.article
+                    key={t.id}
+                    className={`mobile-report-card ${isIngreso ? "income" : "expense"}`}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: Math.min(index * 0.03, 0.3) }}
+                  >
+                    <div className="mobile-card-top">
+                      <div>
+                        <span className={`badge ${isIngreso ? "badge-green" : "badge-red"}`}>
+                          {isIngreso ? "↑ Ingreso" : "↓ Egreso"}
+                        </span>
+                        <p className="mobile-card-date mono">{formatFechaCorta(t.fecha)} · {t.metodo_pago}</p>
+                      </div>
+                      <span className="mobile-card-amount mono" style={{ color: isIngreso ? "var(--accent)" : "var(--red)" }}>
+                        {isIngreso ? "+" : "-"}{formatHNL(t.monto)}
+                      </span>
+                    </div>
+
+                    <div className="mobile-card-main">
+                      <h3>{categoria}</h3>
+                      {t.detalle && <p>{t.detalle}</p>}
+                    </div>
+
+                    <div className="mobile-card-meta">
+                      <div>
+                        <span>Método</span>
+                        <strong className="capitalize">{t.metodo_pago}</strong>
+                      </div>
+                      <div>
+                        <span>Paciente</span>
+                        <strong>{t.pacientes?.nombre_completo ?? "—"}</strong>
+                      </div>
+                    </div>
+                  </motion.article>
+                );
+              })}
+
+              <div className="mobile-report-balance">
+                <span>Balance del período</span>
+                <strong className="mono" style={{ color: balance >= 0 ? "var(--accent)" : "var(--red)" }}>
+                  {balance >= 0 ? "+" : ""}{formatHNL(balance)}
+                </strong>
+              </div>
+            </div>
+          </>
         )}
       </div>
 
@@ -517,6 +571,7 @@ export default function ReportesPage() {
           border-bottom: none;
         }
         .table-foot td { padding: 1rem 1.25rem; background: var(--bg-subtle); border-top: 2px solid var(--border); }
+        :global(.mobile-report-list) { display: none; }
         
         .loading-rows { display: flex; flex-direction: column; gap: 4px; }
         .skeleton-row { height: 44px; background: var(--bg-subtle); border-radius: 6px; animation: pulse 1.5s ease-in-out infinite; }
@@ -524,6 +579,62 @@ export default function ReportesPage() {
         .empty { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.75rem; padding: 4rem 2rem; color: var(--text-muted); font-size: 0.875rem; }
         .mono { font-family: var(--font-mono); }
         @media (max-width: 900px) { .charts-row { grid-template-columns: 1fr; } }
+        @media (max-width: 700px) {
+          :global(.table-card .table-responsive) { display: none; }
+          :global(.mobile-report-list) { display: grid; gap: 1.15rem; padding: 0.25rem 1rem 1rem; }
+          :global(.mobile-report-card) {
+            position: relative;
+            overflow: hidden;
+            border: 1px solid rgba(255, 255, 255, 0.16);
+            border-radius: 22px;
+            background: linear-gradient(145deg, rgba(33, 45, 68, 0.98), rgba(17, 26, 44, 0.98)), var(--surface);
+            box-shadow: 0 18px 34px rgba(0, 0, 0, 0.32), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+            padding: 1rem;
+          }
+          :global(.mobile-report-card::before) {
+            content: "";
+            position: absolute;
+            inset: 0 auto 0 0;
+            width: 5px;
+            background: linear-gradient(180deg, var(--accent), rgba(78, 222, 163, 0.22));
+          }
+          :global(.mobile-report-card.expense::before) { background: linear-gradient(180deg, var(--red), rgba(255, 180, 171, 0.2)); }
+          :global(.mobile-report-card::after) {
+            content: "";
+            position: absolute;
+            inset: 0 0 auto 0;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.18), transparent);
+          }
+          :global(.mobile-card-top) { display: flex; align-items: flex-start; justify-content: space-between; gap: 0.75rem; }
+          :global(.mobile-card-date) { margin-top: 0.55rem; color: var(--text-subtle); font-size: 0.6875rem; font-weight: 700; text-transform: capitalize; }
+          :global(.mobile-card-amount) { font-size: 1rem; font-weight: 900; white-space: nowrap; }
+          :global(.mobile-card-main) { margin-top: 1rem; }
+          :global(.mobile-card-main h3) { margin: 0; color: var(--text); font-size: 0.95rem; font-weight: 850; letter-spacing: -0.01em; }
+          :global(.mobile-card-main p) { margin-top: 0.35rem; color: var(--text-muted); font-size: 0.8125rem; line-height: 1.45; }
+          :global(.mobile-card-meta) { display: grid; gap: 0.625rem; margin-top: 1rem; padding: 0.875rem; border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 14px; background: rgba(9, 16, 30, 0.42); }
+          :global(.mobile-card-meta div) { display: flex; align-items: flex-start; justify-content: space-between; gap: 0.75rem; }
+          :global(.mobile-card-meta span) { color: var(--text-subtle); font-family: var(--font-mono); font-size: 0.625rem; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; }
+          :global(.mobile-card-meta strong) { color: var(--text); font-size: 0.75rem; font-weight: 800; text-align: right; }
+          :global(.mobile-report-balance) {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1rem;
+            padding: 1rem;
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            background: var(--bg-subtle);
+          }
+          :global(.mobile-report-balance span) { color: var(--text-muted); font-size: 0.8125rem; font-weight: 800; }
+          :global(.mobile-report-balance strong) { font-size: 0.95rem; font-weight: 900; }
+          :global([data-theme="light"] .mobile-report-card) {
+            border-color: rgba(15, 28, 19, 0.1);
+            background: linear-gradient(145deg, rgba(255, 255, 255, 0.98), rgba(237, 246, 241, 0.94));
+            box-shadow: 0 16px 34px rgba(15, 28, 19, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.8);
+          }
+          :global([data-theme="light"] .mobile-card-meta) { background: rgba(255, 255, 255, 0.72); }
+        }
         @media (max-width: 640px) {
           :global(.kpi-mini) { min-height: 148px; }
           :global(.kpi-mini-foot) { align-items: flex-start; flex-direction: column; gap: 0.25rem; }

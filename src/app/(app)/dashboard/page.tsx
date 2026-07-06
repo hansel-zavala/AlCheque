@@ -260,41 +260,85 @@ export default function DashboardPage() {
             <p>No hay pacientes con mensualidad activa</p>
           </div>
         ) : (
-          <div className="table-responsive mt-3">
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>Paciente</th>
-                  <th>Plan</th>
-                  <th>Estado</th>
-                  <th>Fecha ingreso</th>
-                </tr>
-              </thead>
-              <tbody>
-                {pacientesActivosPagination.paginatedItems.map((p) => (
-                  <tr key={p.id}>
-                    <td>
-                      <Link href={`/pacientes/${p.id}`} className="patient-link">
-                        {p.nombre_completo}
-                      </Link>
-                    </td>
-                    <td>
-                      <span className="plan-text">
-                        {p.servicios?.nombre ?? "—"}
-                      </span>
-                    </td>
-                    <td>
-                      <span className="badge badge-green">Activo</span>
-                    </td>
-                    <td>
-                      <span className="date-text">
-                        {formatFechaCorta(p.fecha_ingreso)}
-                      </span>
-                    </td>
+          <>
+            <div className="table-responsive mt-3">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Paciente</th>
+                    <th>Plan</th>
+                    <th>Estado</th>
+                    <th>Fecha ingreso</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {pacientesActivosPagination.paginatedItems.map((p) => (
+                    <tr key={p.id}>
+                      <td>
+                        <Link href={`/pacientes/${p.id}`} className="patient-link">
+                          {p.nombre_completo}
+                        </Link>
+                      </td>
+                      <td>
+                        <span className="plan-text">
+                          {p.servicios?.nombre ?? "—"}
+                        </span>
+                      </td>
+                      <td>
+                        <span className="badge badge-green">Activo</span>
+                      </td>
+                      <td>
+                        <span className="date-text">
+                          {formatFechaCorta(p.fecha_ingreso)}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="mobile-dashboard-patients-list" aria-label="Pacientes con mensualidad activa">
+              {pacientesActivosPagination.paginatedItems.map((p, index) => (
+                <motion.article
+                  key={p.id}
+                  className="mobile-dashboard-patient-card"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: Math.min(index * 0.03, 0.3) }}
+                >
+                  <div className="mobile-card-top">
+                    <div>
+                      <span className="badge badge-green">Activo</span>
+                      <p className="mobile-card-date mono">Ingreso · {formatFechaCorta(p.fecha_ingreso)}</p>
+                    </div>
+                    <span className="mobile-patient-code mono">PAC-{p.id.slice(0, 4).toUpperCase()}</span>
+                  </div>
+
+                  <div className="mobile-card-main mobile-patient-main">
+                    <div className="mobile-patient-avatar">{p.nombre_completo.charAt(0).toUpperCase()}</div>
+                    <div>
+                      <Link href={`/pacientes/${p.id}`} className="patient-link">
+                        <h3>{p.nombre_completo}</h3>
+                      </Link>
+                      <p>{p.servicios?.nombre ?? "Sin plan asignado"}</p>
+                    </div>
+                  </div>
+
+                  <div className="mobile-card-meta">
+                    <div>
+                      <span>Plan</span>
+                      <strong>{p.servicios?.nombre ?? "—"}</strong>
+                    </div>
+                    <div>
+                      <span>Estado</span>
+                      <strong>Activo</strong>
+                    </div>
+                  </div>
+                </motion.article>
+              ))}
+            </div>
+
             <Pagination
               totalItems={pacientesActivos.length}
               page={pacientesActivosPagination.page}
@@ -304,7 +348,7 @@ export default function DashboardPage() {
               onPageChange={pacientesActivosPagination.setPage}
               onPageSizeChange={pacientesActivosPagination.setPageSize}
             />
-          </div>
+          </>
         )}
       </motion.div>
 
@@ -407,6 +451,10 @@ export default function DashboardPage() {
           font-family: var(--font-mono);
         }
 
+        :global(.mobile-dashboard-patients-list) {
+          display: none;
+        }
+
         /* Responsive */
         @media (max-width: 1200px) {
           .charts-grid {
@@ -423,6 +471,151 @@ export default function DashboardPage() {
         @media (max-width: 480px) {
           .kpi-grid {
             grid-template-columns: 1fr;
+          }
+        }
+
+        @media (max-width: 700px) {
+          :global(.patients-section .table-responsive) {
+            display: none;
+          }
+
+          :global(.mobile-dashboard-patients-list) {
+            display: grid;
+            gap: 1.15rem;
+            padding: 1rem 1rem 0;
+          }
+
+          :global(.mobile-dashboard-patient-card) {
+            position: relative;
+            overflow: hidden;
+            border: 1px solid rgba(255, 255, 255, 0.16);
+            border-radius: 22px;
+            background:
+              linear-gradient(145deg, rgba(33, 45, 68, 0.98), rgba(17, 26, 44, 0.98)),
+              var(--surface);
+            box-shadow:
+              0 18px 34px rgba(0, 0, 0, 0.32),
+              inset 0 1px 0 rgba(255, 255, 255, 0.08);
+            padding: 1rem;
+          }
+
+          :global(.mobile-dashboard-patient-card::before) {
+            content: "";
+            position: absolute;
+            inset: 0 auto 0 0;
+            width: 5px;
+            background: linear-gradient(180deg, var(--accent), rgba(78, 222, 163, 0.22));
+          }
+
+          :global(.mobile-dashboard-patient-card::after) {
+            content: "";
+            position: absolute;
+            inset: 0 0 auto 0;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.18), transparent);
+          }
+
+          :global(.mobile-card-top) {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 0.75rem;
+          }
+
+          :global(.mobile-card-date),
+          :global(.mobile-patient-code) {
+            margin-top: 0.55rem;
+            color: var(--text-subtle);
+            font-size: 0.6875rem;
+            font-weight: 700;
+          }
+
+          :global(.mobile-patient-code) {
+            margin-top: 0;
+            white-space: nowrap;
+          }
+
+          :global(.mobile-card-main) {
+            margin-top: 1rem;
+          }
+
+          :global(.mobile-patient-main) {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+          }
+
+          :global(.mobile-patient-avatar) {
+            display: grid;
+            place-items: center;
+            width: 42px;
+            height: 42px;
+            flex: 0 0 auto;
+            border-radius: 999px;
+            background: var(--accent-muted);
+            color: var(--accent);
+            font-size: 0.875rem;
+            font-weight: 900;
+          }
+
+          :global(.mobile-card-main h3) {
+            margin: 0;
+            color: var(--text);
+            font-size: 0.95rem;
+            font-weight: 850;
+            letter-spacing: -0.01em;
+          }
+
+          :global(.mobile-card-main p) {
+            margin-top: 0.35rem;
+            color: var(--text-muted);
+            font-size: 0.8125rem;
+            line-height: 1.45;
+          }
+
+          :global(.mobile-card-meta) {
+            display: grid;
+            gap: 0.625rem;
+            margin-top: 1rem;
+            padding: 0.875rem;
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            border-radius: 14px;
+            background: rgba(9, 16, 30, 0.42);
+          }
+
+          :global(.mobile-card-meta div) {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 0.75rem;
+          }
+
+          :global(.mobile-card-meta span) {
+            color: var(--text-subtle);
+            font-family: var(--font-mono);
+            font-size: 0.625rem;
+            font-weight: 800;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+          }
+
+          :global(.mobile-card-meta strong) {
+            color: var(--text);
+            font-size: 0.75rem;
+            font-weight: 800;
+            text-align: right;
+          }
+
+          :global([data-theme="light"] .mobile-dashboard-patient-card) {
+            border-color: rgba(15, 28, 19, 0.1);
+            background: linear-gradient(145deg, rgba(255, 255, 255, 0.98), rgba(237, 246, 241, 0.94));
+            box-shadow:
+              0 16px 34px rgba(15, 28, 19, 0.1),
+              inset 0 1px 0 rgba(255, 255, 255, 0.8);
+          }
+
+          :global([data-theme="light"] .mobile-card-meta) {
+            background: rgba(255, 255, 255, 0.72);
           }
         }
       `}</style>
