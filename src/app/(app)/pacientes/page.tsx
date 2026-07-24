@@ -300,17 +300,17 @@ export default function PacientesPage() {
   return (
     <div className="page animate-fade-in-up">
       {/* Header */}
-      <div className="page-head flex items-center justify-between flex-wrap gap-4">
-        <div>
+      <div className="page-head flex flex-col lg:flex-row lg:items-center justify-between gap-4 lg:gap-8">
+        <div className="shrink-0">
           <h1 className="page-title text-3xl font-extrabold tracking-tight">Gestión de Pacientes</h1>
           <p className="page-sub text-sm text-[var(--text-muted)] mt-1">Directorio / Pacientes Activos</p>
         </div>
-        <div className="flex items-center gap-3 flex-wrap">
-          <div className="search-wrap">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full lg:w-auto lg:flex-1 lg:max-w-2xl lg:justify-end">
+          <div className="search-wrap flex-1 min-w-0">
             <Search size={15} className="search-icon" />
             <input
               type="text"
-              className="search-input"
+              className="search-input w-full"
               placeholder="Buscar pacientes..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
@@ -318,7 +318,7 @@ export default function PacientesPage() {
             />
           </div>
           <button
-            className="btn-primary btn-pressable flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs tracking-wider uppercase"
+            className="btn-primary btn-pressable flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs tracking-wider uppercase shrink-0"
             onClick={() => { setShowForm(true); setEditingId(null); reset({ estado_suscripcion: "activo", fecha_ingreso: todayInput }); }}
             id="nuevo-paciente-btn"
           >
@@ -900,7 +900,7 @@ export default function PacientesPage() {
 
         .search-wrap {
           position: relative;
-          min-width: 220px;
+          min-width: auto;
         }
 
         :global(.search-icon) {

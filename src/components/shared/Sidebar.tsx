@@ -27,7 +27,7 @@ import { ThemeToggle } from "./ThemeToggle";
 const navItems = [
   { href: "/dashboard", icon: LayoutDashboard, label: "DASHBOARD" },
   { href: "/pacientes", icon: Users, label: "PACIENTES" },
-  { href: "/ingresos-clinicos", icon: CircleDollarSign, label: "INGRESOS CLÍNICOS" },
+  { href: "/ingresos-clinicos", icon: CircleDollarSign, label: "INGRESOS ESPERADOS" },
   { href: "/transacciones", icon: ArrowLeftRight, label: "TRANSACCIONES" },
   { href: "/reportes", icon: BarChart3, label: "REPORTES" },
   { href: "/configuracion", icon: Settings, label: "CONFIGURACIÓN" },
@@ -210,10 +210,10 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
 
           {/* Footer */}
           <div className="px-4 pt-3 pb-5 border-t border-[var(--border)] flex items-center gap-2">
-            <Link href="/soporte" className="flex-1 flex items-center justify-center gap-1.5 py-2 px-1 h-12 rounded-lg border border-[var(--border)] text-[var(--text-subtle)] text-[12px] font-mono font-bold tracking-wider hover:bg-[var(--surface-hover)] hover:text-[var(--text)] hover:border-[var(--border-strong)] no-underline transition-colors" onClick={onClose}>
+          {/*  <Link href="/soporte" className="flex-1 flex items-center justify-center gap-1.5 py-2 px-1 h-12 rounded-lg border border-[var(--border)] text-[var(--text-subtle)] text-[12px] font-mono font-bold tracking-wider hover:bg-[var(--surface-hover)] hover:text-[var(--text)] hover:border-[var(--border-strong)] no-underline transition-colors" onClick={onClose}>
               <HelpCircle size={15} />
               <span>SOPORTE</span>
-            </Link>
+            </Link>*/}
             <button
               className="flex-1 flex items-center justify-center gap-1.5 py-2 px-1 h-12 rounded-lg border border-[var(--border)] text-[var(--text-subtle)] text-[12px] font-mono font-bold tracking-wider hover:bg-[var(--surface-hover)] hover:text-[var(--text)] hover:border-[var(--border-strong)] transition-colors"
               onClick={handleLogout}
